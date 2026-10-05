@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Приёмка задачи. Задача считается завершённой только при exit code 0.
-# Тестовые команды появятся в BE-01; до этого скрипт падает после проверки памяти.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 bash scripts/check-memory.sh
 
-echo "==> Тесты не настроены (BE-01): приёмка не может быть зелёной" >&2
-exit 1
+echo "==> Линтер (oxlint)"
+npm run lint
+echo "==> Сборка"
+npm run build
+echo "==> Unit-тесты (Vitest)"
+npm test
+echo "==> e2e-тесты (Vitest + supertest)"
+npm run test:e2e
+echo "==> Приёмка пройдена"

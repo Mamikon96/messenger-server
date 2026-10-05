@@ -1,7 +1,7 @@
 # Конвенции кода
 Читать: при создании/изменении модулей, контроллеров, сервисов, DTO, миграций.
 
-- Структура NestJS: `src/<module>/` с `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`; файлы в kebab-case. Язык и конфиги линтера/форматтера фиксируются в BE-01 — до тех пор не придумывать, спрашивать (`ask-user.md`).
+- Структура NestJS: `src/<module>/` с `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`; файлы в kebab-case. Язык — TypeScript (strict, ESM); линтер — oxlint (`npm run lint`), форматтер — Prettier (`.prettierrc`) (BE-D04).
 - Валидация входа — DTO на границе (HTTP и WebSocket); контроллеры тонкие, логика в сервисах.
 - Членство в чате и права проверяются на **каждом** событии/запросе (`memory/product-agreements.md`).
 - Схема БД меняется только миграциями; ручные правки схемы запрещены.

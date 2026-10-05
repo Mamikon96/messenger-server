@@ -3,14 +3,16 @@
 Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей). Клиент — отдельный репозиторий `messenger-client-react` (`/home/mako/Projects/react/messenger-client-react`).
 
 ## Стек
-Node.js + NestJS (BE-D01), WebSocket, PostgreSQL (SH-D07). Остальные библиотеки и тестовый стек пока не выбраны — по `.ai/rules/tech-approval.md`. Кода в проекте пока нет (BE-01).
+Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + supertest, линтер oxlint (BE-D04), WebSocket, PostgreSQL (SH-D07). Остальные библиотеки (ORM/драйвер БД, WebSocket-слой и др.) пока не выбраны — по `.ai/rules/tech-approval.md`.
 
 ## Команды
 - `bash scripts/check-memory.sh` — проверка памяти
-- `bash scripts/accept.sh` — приёмка: проверка памяти + тесты; до BE-01 падает намеренно (тесты не настроены)
+- `npm run start:dev` — запуск с перезагрузкой; `npm run build` — сборка
+- `npm run lint` — oxlint; `npm test` — unit (Vitest, `src/**/*.spec.ts`); `npm run test:e2e` — e2e (`test/*.e2e-spec.ts`)
+- `bash scripts/accept.sh` — приёмка: проверка памяти + lint + build + unit + e2e
 
 ## Структура
-Пока: `.ai/` (правила и память), `scripts/`. Структура кода — в `.ai/memory/architecture.md` (заполняется с BE-01).
+`src/` (NestJS-код), `test/` (e2e), `.ai/` (правила и память), `scripts/`. Карта модулей — в `.ai/memory/architecture.md`.
 
 ## Контекст для AI: читай только нужное
 Правила и память разложены по файлам в `.ai/`. **Не читай всё подряд** — открывай файлы по маршрутизатору `.ai/README.md`:
@@ -33,4 +35,4 @@ Node.js + NestJS (BE-D01), WebSocket, PostgreSQL (SH-D07). Остальные б
 3. **Приёмка:** «Сделано» только при `bash scripts/accept.sh` = 0 **и** APPROVE от `nestjs-reviewer`; ревью запускает основная сессия. См. `.ai/rules/acceptance.md`.
 4. Для нового поведения — тест в рамках той же задачи, тесты пишутся до реализации. См. `.ai/rules/testing.md`.
 5. **Не придумывать — спрашивать:** любой агент при сомнении или нехватке данных спрашивает пользователя (`AskUserQuestion`); догадки и собственные допущения запрещены. Агент без возможности спросить возвращает вопросы вызывающему, а тот переадресует их пользователю. См. `.ai/rules/ask-user.md`.
-6. **Git:** каталог пока не git-репозиторий; git-правил и скрипта нет (BE-02) — любые git-операции только по просьбе пользователя.
+6. **Git:** репозиторий создан (ветка `main`), но git-правил и скрипта нет (BE-02) — любые git-операции (коммиты, ветки) только по просьбе пользователя.

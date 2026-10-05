@@ -1,22 +1,22 @@
 # Состояние backend
-> Проверено: 2026-10-05 @ no-git
+> Проверено: 2026-10-05 @ b155b8a+dirty
 
 ## Общее
-Проект бэкенда мессенджера пока без кода: в каталоге только `.ai/`, `scripts/` и `CLAUDE.md`. Стек выбран: Node.js + NestJS + WebSocket + PostgreSQL (`decisions.md` BE-D01, SH-D07). Каталог не git-репозиторий.
+Каркас NestJS 12 (шаблон Nest CLI) с hello-world, тестами Vitest и линтером oxlint. Стек: Node.js + NestJS + WebSocket + PostgreSQL (`decisions.md` BE-D01, SH-D07, BE-D03, BE-D04). БД, WebSocket и бизнес-логики нет.
 
 ## Что работает
 - Механическая проверка памяти `scripts/check-memory.sh`.
-- Больше ничего: package.json, src/, тестов, БД нет.
+- `npm run build`, `npm run lint`, `npm test`, `npm run test:e2e` (шаблонные тесты `src/app.controller.spec.ts`, `test/app.e2e-spec.ts`).
+- Подключения к БД, WebSocket, auth нет.
 
 ## Известные проблемы
-1. `scripts/accept.sh`: тестовых команд нет, скрипт намеренно падает после проверки памяти до выполнения BE-01 — «зелёной» приёмки не существует.
-2. Каталог не git-репозиторий: штампы памяти идут как `@ no-git`, проверка актуальности по `git status` в `scripts/check-memory.sh` отключена (BE-02).
+1. Git-правила и скрипт задач (git-task) отсутствуют (BE-02): репозиторий создан (ветка `main`), remote не настроен.
 
 ## Последняя приёмка
-Не запускалась (`bash scripts/accept.sh` → код 1 до BE-01; `bash scripts/check-memory.sh` отдельно — код 0) · 2026-10-05
+`bash scripts/accept.sh` → код 0 · 2026-10-05
 
 ## Зависимости от другой стороны
 Контракт auth — во frontend-репозитории (`memory/README.md`); frontend ждёт реальный сервер вместо mock-BFF.
 
 ## Фокус сейчас
-Не определён — выбрать из `tasks.md` (P1: BE-01, BE-03).
+Следующая P1-задача: BE-03.

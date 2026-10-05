@@ -2,7 +2,7 @@
 Читать: когда задача реализована и нужно решить, можно ли её закрыть.
 
 В «Сделано» — только при **обоих** условиях:
-1. `bash scripts/accept.sh` → код 0 (проверка памяти `scripts/check-memory.sh` + тесты; тестовые команды задаются в BE-01 — до этого скрипт падает намеренно).
+1. `bash scripts/accept.sh` → код 0 (проверка памяти `scripts/check-memory.sh` + lint + build + unit + e2e).
 2. Ревьюер `nestjs-reviewer` вынес **APPROVE** по текущему коду (ревью — после зелёной приёмки).
 
 Порядок: реализация → `bash scripts/accept.sh` → ревью → при `REJECT`/`APPROVE WITH FIXES` исправить все BLOCKER и MAJOR, повторить приёмку и **повторное** ревью → запись в «Сделано» с пометкой `ревью: nestjs-reviewer APPROVE`.
