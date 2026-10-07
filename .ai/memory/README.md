@@ -19,7 +19,7 @@
 | product-agreements.md | Цель, рамки и соглашения по продукту, архитектуре и бэкенду | проектирование контракта API/событий, реалтайм, серверное хранение | Менять только по решению пользователя (запись в `decisions.md`) |
 | decisions.md | Решения: что, почему, альтернативы (общие `SH-Dxx`, backend `BE-Dxx`) | процесс/память, архитектурный выбор, новая технология (искать по заголовкам `## SH-Dxx` / `## BE-Dxx`) | Только добавлять в конец |
 
-Контракт auth для этого проекта задан на стороне frontend: `frontend/auth-contract.md` в репозитории `messenger-client-react` (`/home/mako/Projects/react/messenger-client-react/.ai/memory/frontend/auth-contract.md`). Своего `contracts.md` нет — контракты API/событий проектируются здесь (BE-03).
+Контракт auth для этого проекта задан на стороне frontend: файл auth-contract.md в памяти репозитория `messenger-client-react` (`/home/mako/Projects/react/messenger-client-react/.ai/memory/auth-contract.md`). Своего `contracts.md` нет — контракты API/событий проектируются здесь (BE-03).
 
 ## Правила актуальности и корректности
 - Первая строка после заголовка в `state.md`, `tasks.md`, `architecture.md`: `> Проверено: ГГГГ-ММ-ДД @ <git sha>[+dirty]` — дата и коммит, на которых факты сверены с кодом. Без git — `@ no-git`. Обновляется **только** после реальной сверки.

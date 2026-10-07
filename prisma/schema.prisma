@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Provider {
+  google
+  github
+}
+
+enum ChatType {
+  direct
+  group
+}
+
+enum ChatRole {
+  owner
+  member
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  provider       Provider
+  providerUserId String   @map("provider_user_id")
+  name           String
+  avatarUrl      String   @map("avatar_url")
+  isAdmin        Boolean  @default(false) @map("is_admin")
+  createdAt      DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+
+  allowlistEntries AllowlistEntry[] @relation("AllowlistAddedBy")
+  allowlistEntry   AllowlistEntry?  @relation("AllowlistLinkedUser")
+  sessions         Session[]
+  createdChats     Chat[]
+  memberships      ChatMember[]
+  messages         Message[]
+
+  @@unique([provider, providerUserId])
+  @@map("users")
+}
+
+model AllowlistEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  provider      Provider
+  providerLogin String   @map("provider_login")
+  addedById     String?  @map("added_by") @db.Uuid
+  userId        String?  @unique @map("user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+
+  addedBy User? @relation("AllowlistAddedBy", fields: [addedById], references: [id])
+  user    User? @relation("AllowlistLinkedUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerLogin])
+  @@map("allowlist")
+}
+
+model Session {
+  id        String   @id
+  userId    String   @map("user_id") @db.Uuid
+  csrfToken String   @map("csrf_token")
+  expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Chat {
+  id          String   @id @default(uuid()) @db.Uuid
+  type        ChatType
+  title       String?
+  directKey   String?  @unique @map("direct_key")
+  createdById String   @map("created_by") @db.Uuid
+  lastSeq     Int      @default(0) @map("last_seq")
+  createdAt   DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+
+  createdBy User         @relation(fields: [createdById], references: [id])
+  members   ChatMember[]
+  messages  Message[]
+
+  @@map("chats")
+}
+
+model ChatMember {
+  chatId      String   @map("chat_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  role        ChatRole @default(member)
+  lastReadSeq Int      @default(0) @map("last_read_seq")
+  joinedAt    DateTime @default(now()) @db.Timestamptz(3) @map("joined_at")
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([chatId, userId])
+  @@index([userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id        String   @id @default(uuid()) @db.Uuid
+  chatId    String   @map("chat_id") @db.Uuid
+  seq       Int
+  senderId  String   @map("sender_id") @db.Uuid
+  clientId  String   @map("client_id")
+  body      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id])
+
+  @@unique([chatId, seq])
+  @@unique([chatId, senderId, clientId])
+  @@map("messages")
+}

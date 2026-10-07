@@ -1,19 +1,24 @@
 # Задачи backend
-> Проверено: 2026-10-05 @ b155b8a+dirty
+> Проверено: 2026-10-07 @ 43dc594+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-_(пусто)_
+- **BE-D15 (P2)** Вход по `providerUserId` (закрывает идею BE-10): привязка allowlist к пользователю (`allowlist.user_id`), обновление логина/email только в allowlist (колонку `users.provider_login` убрали), Google и GitHub, `FIRST_ADMIN` только пока нет админа, конфликт логина → `login_taken`. Реализовано (миграция `20261007120000_allowlist_user_link`, `AuthService.signIn`, e2e 56; ревью 3: найдена и исправлена гонка двойного первого входа). Ревью 1 и 2: APPROVE WITH FIXES (конфликт логина, тесты, атомарная привязка, спека — исправлено). Коды `already_exists`, `login_taken` и правило `FIRST_ADMIN` подтверждены пользователем 2026-10-07. Осталось: `sg docker -c "bash scripts/accept.sh"` → повторное ревью `nestjs-reviewer` → «Сделано»; клиенту добавить сообщение для `auth_error=not_allowed` и `login_taken`.
 
 ## Бэклог
+- **BE-12 (P2)** Правки спеки по анализу системного аналитика (2026-10-07): формат WS-кадра `error` (спека §3 vs §4); код `not_allowed` значит и «нет в allowlist», и «нет прав» (решить про `forbidden`); судьба `not_a_member`; события о добавлении в чат; разделить `auth_error` и `error.code` (`login_taken`); снять «черновик на ревью» и «тестовая БД требует согласования» (BE-D08). Перед планом BE-07 — вопросы по чатам (`docs/open-questions.md`). Зависит от: ответов пользователя.
 - **BE-02 (P2)** Git (`git init`, ветка `main`, `.gitignore`, первый коммит уже сделаны): .ai/rules/git-flow.md и scripts/git-task.sh по образцу frontend-проекта (требует уточнения: ветки, remote, PR-процесс); после этого вернуть в `scripts/check-memory.sh` проверку sha в штампе. Зависит от: решения пользователя.
-- **BE-03 (P1)** Контракт API и событий (REST + WebSocket) и схема БД PostgreSQL: сверить с `frontend/auth-contract.md` во frontend-репозитории; зафиксировать в `architecture.md` и `decisions.md`. Зависит от: BE-01.
-- **BE-04 (P2)** Auth: BFF/OAuth и cookie-сессия по контракту frontend (провайдеры, CSRF, коды ошибок). Зависит от: BE-03.
+- **BE-11 (P3, техдолг, MINOR ревью фазы 1)** В `scripts/accept.sh` ставить `trap` до `docker compose up`; сбой `sessions.destroy(previous)` в `AuthController.callback` не должен ломать вход (логировать `warn`); чистить просроченные сессии пользователя в `SessionsService.create`; в README указать, как поднять `postgres-test` перед `npm run test:e2e`, и убрать остатки шаблона Nest; (BE-D15, гонка) P2002 в `AuthService.signIn` при параллельном `allowlist.add` того же логина → `login_taken`/лог; явные правила фильтра ошибок для 409/413 (сейчас → `validation_failed`, `app-exception.filter.ts`); WS-фильтр ошибок на фазе 4; `.env.example` (`PORT`, `ALLOWED_ORIGINS`) не совпадает с dev-окружением клиента; неподтверждённый email Google → `provider_error` вместо `not_allowed`; процедура восстановления админа (SQL) в README; пустой `name`/`given_name` Google → запасное имя (`||` вместо `??`); `z.url()` вместо `z.string().url()`; `resolve()` возвращает суженный `Provider`.
+- **BE-07 (P1)** Фаза 2: чаты и участники (`/api/chats*`, роли owner/member, 1:1 идемпотентно) — отдельный план по спеке BE-03. Зависит от: BE-03 (фаза 1).
+- **BE-08 (P1)** Фаза 3: сообщения и история (`seq`, идемпотентность по `clientId`, курсоры, `read`, лимиты 429). Зависит от: BE-07.
+- **BE-09 (P1)** Фаза 4: WebSocket `/ws` (cookie+Origin, `message.new`/`chat.updated`/`chat.removed`, heartbeat). Зависит от: BE-08.
 - **BE-05 (P3)** Агент `task-planner` пишет в .ai/memory/frontend/tasks.md (во frontend-проекте); перенастроить для backend (`~/.claude/agents/task-planner.md`, вне репозитория — по согласованию с пользователем).
+- **BE-06 (P3, техдолг)** Добавить `isAdmin` в тело `GET /api/auth/session`, чтобы клиент мог показывать админ-UI: расширение auth-контракта клиента и правка клиента (SH-D12). Зависит от: BE-03 (фаза 1), согласования с клиентом.
 
 ## Сделано
+- 2026-10-07 — BE-03 фаза 1 (покрывает BE-04): конфиг (zod), Prisma-схема и миграция `init`, формат ошибок, сессии/CSRF, allowlist и `/api/admin/allowlist`, OAuth (arctic, Google/GitHub), `GET /api/users`, Docker Compose для dev/test БД (приёмка: `bash scripts/accept.sh` → 0, unit 29, e2e 43; ревью: nestjs-reviewer APPROVE со 2-го раза). Код `already_exists` подтверждён пользователем 2026-10-07. OAuth проверен только с подменённым провайдером
 - 2026-10-05 — Создана AI-структура backend: `.ai/`, `CLAUDE.md`, `scripts/check-memory.sh`, `scripts/accept.sh` по образцу frontend (приёмка: `bash scripts/check-memory.sh` ✓; ревью не требуется — только процесс/документация; решение SH-D01)
 - 2026-10-05 — Плоская раскладка памяти: `backend/` убрана, файлы перенесены в `.ai/memory/`, решения объединены в `decisions.md`; обновлены `CLAUDE.md`, правила, `scripts/check-memory.sh` (приёмка: `bash scripts/check-memory.sh` ✓; ревью не требуется — только процесс/документация; решение SH-D08)
 - 2026-10-05 — BE-01 Каркас проекта и приёмка: NestJS 12, Vitest + supertest, oxlint, npm (BE-D03, BE-D04), `scripts/accept.sh`, `CLAUDE.md` (приёмка: `bash scripts/accept.sh` → 0, unit 1/1, e2e 1/1; ревью: nestjs-reviewer APPROVE)

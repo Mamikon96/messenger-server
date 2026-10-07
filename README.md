@@ -21,6 +21,18 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+## Локальный запуск
+
+```bash
+cp .env.example .env        # заполнить OAuth-ключи и FIRST_ADMIN
+docker compose up -d --wait # dev-PostgreSQL на порту 5434 (БД messenger, данные в томе)
+npm install                 # генерирует клиент Prisma
+npm run db:migrate          # применить миграции
+npm run start:dev
+```
+
+Приёмка: `bash scripts/accept.sh` (нужен Docker) — поднимает отдельную одноразовую БД `postgres-test` на порту 5433 и не трогает dev-данные.
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
