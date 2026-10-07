@@ -8,7 +8,7 @@ function codeForStatus(status: number): ErrorCode {
     case 401:
       return 'unauthorized';
     case 403:
-      return 'not_allowed';
+      return 'forbidden';
     case 404:
     case 405:
       return 'not_found';

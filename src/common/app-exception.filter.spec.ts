@@ -38,7 +38,7 @@ describe('AppExceptionFilter', () => {
   });
 
   it.each([
-    [403, 'not_allowed'],
+    [403, 'forbidden'],
     [404, 'not_found'],
     [405, 'not_found'],
     [413, 'validation_failed'],

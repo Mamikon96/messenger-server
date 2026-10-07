@@ -5,8 +5,17 @@ import { AllowlistModule } from './allowlist/allowlist.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { ConfigModule } from './config/config.module.js';
+import { ChatsModule } from './chats/chats.module.js';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, SessionsModule, AllowlistModule, AuthModule, UsersModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    SessionsModule,
+    AllowlistModule,
+    AuthModule,
+    UsersModule,
+    ChatsModule,
+  ],
 })
 export class AppModule {}

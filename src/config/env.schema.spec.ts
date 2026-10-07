@@ -50,4 +50,16 @@ describe('parseEnv', () => {
   it('rejects FIRST_ADMIN with an unknown provider', () => {
     expect(() => parseEnv({ ...valid, FIRST_ADMIN: 'gitlab:x' })).toThrow();
   });
+
+  it('defaults maxGroupMembers to 100', () => {
+    expect(parseEnv(valid).maxGroupMembers).toBe(100);
+  });
+
+  it('reads MAX_GROUP_MEMBERS', () => {
+    expect(parseEnv({ ...valid, MAX_GROUP_MEMBERS: '25' }).maxGroupMembers).toBe(25);
+  });
+
+  it('rejects MAX_GROUP_MEMBERS=1', () => {
+    expect(() => parseEnv({ ...valid, MAX_GROUP_MEMBERS: '1' })).toThrow();
+  });
 });

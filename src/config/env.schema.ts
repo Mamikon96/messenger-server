@@ -9,6 +9,7 @@ export interface AppConfig {
   allowedOrigins: string[];
   sessionCookieName: string;
   sessionTtlDays: number;
+  maxGroupMembers: number;
   firstAdmin: { provider: Provider; login: string };
   oauth: Record<Provider, { clientId: string; clientSecret: string }>;
 }
@@ -34,6 +35,7 @@ const envSchema = z.object({
     .transform((value) => value.split(',').map((origin) => origin.trim()).filter(Boolean)),
   SESSION_COOKIE_NAME: z.string().min(1).default('sid'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  MAX_GROUP_MEMBERS: z.coerce.number().int().min(2).default(100),
   FIRST_ADMIN: firstAdmin,
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -50,6 +52,7 @@ export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
     allowedOrigins: env.ALLOWED_ORIGINS,
     sessionCookieName: env.SESSION_COOKIE_NAME,
     sessionTtlDays: env.SESSION_TTL_DAYS,
+    maxGroupMembers: env.MAX_GROUP_MEMBERS,
     firstAdmin: env.FIRST_ADMIN,
     oauth: {
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },

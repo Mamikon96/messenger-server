@@ -2,7 +2,7 @@ import { HttpException } from '@nestjs/common';
 
 export type ErrorCode =
   | 'validation_failed'
-  | 'not_a_member'
+  | 'forbidden'
   | 'already_member'
   | 'already_exists'
   | 'login_taken'

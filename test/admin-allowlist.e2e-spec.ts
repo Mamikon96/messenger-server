@@ -31,7 +31,7 @@ describe('Admin allowlist (e2e)', () => {
       .set('X-CSRF-Token', user.csrf)
       .send({ provider: 'github', login: 'x' })
       .expect(403);
-    expect(post.body.error.code).toBe('not_allowed');
+    expect(post.body.error.code).toBe('forbidden');
     await http
       .delete('/api/admin/allowlist/00000000-0000-0000-0000-000000000000')
       .set('Cookie', user.cookie)
@@ -44,7 +44,7 @@ describe('Admin allowlist (e2e)', () => {
   });
 
   it('admin adds, lists and deletes entries', async () => {
-    const admin = await loginAs(app, { isAdmin: true });
+    const admin = await loginAs(app, { isAdmin: true, allowlisted: false });
     const http = request(app.getHttpServer());
     const created = await http
       .post('/api/admin/allowlist')

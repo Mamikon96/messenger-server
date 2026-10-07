@@ -25,6 +25,12 @@ export class AuthService {
   ): Promise<{ token: string; expiresAt: Date }> {
     const login = profile.login.toLowerCase();
     const user = await this.prisma.$transaction(async (tx) => {
+      // Sign-ins of one account (several tabs) run one at a time: under READ COMMITTED their
+      // reads would otherwise mix states before/after a parallel commit (false `not_allowed`,
+      // deleting an already deleted entry). Other accounts are not blocked; races between
+      // accounts for one entry are settled by the atomic claim below (BE-D15, BE-13).
+      const accountKey = `auth:${provider}:${profile.providerUserId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${accountKey}, 0))`;
       const existing = await tx.user.findUnique({
         where: { provider_providerUserId: { provider, providerUserId: profile.providerUserId } },
       });

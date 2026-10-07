@@ -64,4 +64,35 @@ describe('DB schema (e2e)', () => {
       prisma.message.create({ data: { ...base, seq: 2, clientId: 'c1' } }),
     ).rejects.toMatchObject({ code: 'P2002' });
   });
+
+  describe('chats_type_shape CHECK', () => {
+    const insert = async (type: 'direct' | 'group', directKey: string | null, title: string | null) => {
+      const user = await newUser('1');
+      return prisma.$executeRaw`
+        INSERT INTO chats (id, type, direct_key, title, created_by)
+        VALUES (gen_random_uuid(), ${type}::"ChatType", ${directKey}, ${title}, ${user.id}::uuid)`;
+    };
+
+    it('rejects a direct chat with a title', async () => {
+      await expect(insert('direct', 'a:b', 't')).rejects.toThrow(/chats_type_shape/);
+    });
+
+    it('rejects a direct chat without direct_key', async () => {
+      await expect(insert('direct', null, null)).rejects.toThrow(/chats_type_shape/);
+    });
+
+    it('rejects a group chat without a title', async () => {
+      await expect(insert('group', null, null)).rejects.toThrow(/chats_type_shape/);
+    });
+
+    it('rejects a group chat with direct_key', async () => {
+      await expect(insert('group', 'a:b', 't')).rejects.toThrow(/chats_type_shape/);
+    });
+
+    it('accepts valid direct and group chats', async () => {
+      await expect(insert('direct', 'a:b', null)).resolves.toBe(1);
+      await resetDb(prisma);
+      await expect(insert('group', null, 't')).resolves.toBe(1);
+    });
+  });
 });

@@ -16,7 +16,7 @@ export interface TestLogin {
 
 export async function loginAs(
   app: INestApplication,
-  options: { isAdmin?: boolean; providerUserId?: string; name?: string } = {},
+  options: { isAdmin?: boolean; providerUserId?: string; name?: string; allowlisted?: boolean } = {},
 ): Promise<TestLogin> {
   const prisma = app.get(PrismaService);
   const providerUserId = options.providerUserId ?? Math.random().toString(36).slice(2);
@@ -27,6 +27,9 @@ export async function loginAs(
       name: options.name ?? providerUserId,
       avatarUrl: '',
       isAdmin: options.isAdmin ?? false,
+      ...((options.allowlisted ?? true)
+        ? { allowlistEntry: { create: { provider: 'github', providerLogin: `test-${providerUserId}` } } }
+        : {}),
     },
   });
   const { token, csrfToken } = await app.get(SessionsService).create(user.id);
