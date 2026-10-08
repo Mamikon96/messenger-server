@@ -9,7 +9,6 @@ import { SessionsService } from '../src/sessions/sessions.service.js';
 import { createTestApp } from './support/create-app.js';
 import { resetDb } from './support/db.js';
 
-
 @Controller('probe')
 @UseGuards(SessionGuard, CsrfGuard)
 class ProbeController {
@@ -123,6 +122,43 @@ describe('Sessions (e2e)', () => {
         .set('Cookie', `sid=${token}`)
         .set('X-CSRF-Token', csrfToken)
         .expect(201);
+    });
+  });
+  describe('authenticate / existingIds', () => {
+    const hash = (token: string) => createHash('sha256').update(token).digest('hex');
+
+    it('returns null for missing, garbled and unknown cookies', async () => {
+      expect(await sessions.authenticate(undefined)).toBeNull();
+      expect(await sessions.authenticate('')).toBeNull();
+      expect(await sessions.authenticate('sid=%E0%A4%A')).toBeNull();
+      expect(await sessions.authenticate('sid=unknown')).toBeNull();
+      expect(await sessions.authenticate('other=1')).toBeNull();
+    });
+
+    it('returns the session details for a valid sid cookie', async () => {
+      const { token, csrfToken, expiresAt } = await sessions.create(userId);
+      const result = await sessions.authenticate(`foo=1; sid=${token}`);
+      expect(result).toEqual({
+        userId,
+        csrfToken,
+        expiresAt,
+        token,
+        sessionId: hash(token),
+      });
+    });
+
+    it('deletes and rejects an expired session', async () => {
+      const { token } = await sessions.create(userId);
+      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+      expect(await sessions.authenticate(`sid=${token}`)).toBeNull();
+      expect(await prisma.session.count()).toBe(0);
+    });
+
+    it('existingIds returns only ids that exist', async () => {
+      const { token } = await sessions.create(userId);
+      const ids = await sessions.existingIds([hash(token), 'missing']);
+      expect([...ids]).toEqual([hash(token)]);
+      expect((await sessions.existingIds([])).size).toBe(0);
     });
   });
 });

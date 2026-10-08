@@ -12,6 +12,8 @@ export interface TestAppOptions {
   overrides?: ProviderOverride[];
   controllers?: ModuleMetadata['controllers'];
   imports?: ModuleMetadata['imports'];
+  /** Слушать случайный порт (нужно для WebSocket-клиента). */
+  listen?: boolean;
 }
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<INestApplication> {
@@ -25,5 +27,6 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<INest
   const app = (await builder.compile()).createNestApplication();
   configureApp(app);
   await app.init();
+  if (options.listen) await app.listen(0);
   return app;
 }

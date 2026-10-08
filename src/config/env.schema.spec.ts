@@ -79,4 +79,37 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...valid, MAX_MESSAGE_LENGTH: '0' })).toThrow();
     expect(() => parseEnv({ ...valid, MESSAGE_RATE_PER_MINUTE: 'abc' })).toThrow();
   });
+
+  it('normalizes ALLOWED_ORIGINS (case, trailing slash, default port)', () => {
+    const config = parseEnv({
+      ...valid,
+      ALLOWED_ORIGINS: 'https://X.com/, http://localhost:3000, https://y.com:443',
+    });
+    expect(config.allowedOrigins).toEqual([
+      'https://x.com',
+      'http://localhost:3000',
+      'https://y.com',
+    ]);
+  });
+
+  it('rejects an invalid ALLOWED_ORIGINS entry', () => {
+    expect(() => parseEnv({ ...valid, ALLOWED_ORIGINS: 'not a url' })).toThrow();
+  });
+
+  it('defaults websocket settings', () => {
+    const config = parseEnv(valid);
+    expect(config.wsHeartbeatMs).toBe(30000);
+    expect(config.wsMaxSocketsPerUser).toBe(10);
+  });
+
+  it('reads WS_HEARTBEAT_MS and WS_MAX_SOCKETS_PER_USER', () => {
+    const config = parseEnv({ ...valid, WS_HEARTBEAT_MS: '100', WS_MAX_SOCKETS_PER_USER: '3' });
+    expect(config.wsHeartbeatMs).toBe(100);
+    expect(config.wsMaxSocketsPerUser).toBe(3);
+  });
+
+  it('rejects non-positive websocket settings', () => {
+    expect(() => parseEnv({ ...valid, WS_MAX_SOCKETS_PER_USER: '0' })).toThrow();
+    expect(() => parseEnv({ ...valid, WS_HEARTBEAT_MS: '0' })).toThrow();
+  });
 });

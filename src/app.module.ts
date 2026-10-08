@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { ChatsModule } from './chats/chats.module.js';
 import { MessagesModule } from './messages/messages.module.js';
+import { RealtimeModule } from './realtime/realtime.module.js';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { MessagesModule } from './messages/messages.module.js';
     UsersModule,
     ChatsModule,
     MessagesModule,
+    RealtimeModule,
   ],
 })
 export class AppModule {}

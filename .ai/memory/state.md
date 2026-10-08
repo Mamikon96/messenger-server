@@ -1,8 +1,8 @@
 # Состояние backend
-> Проверено: 2026-10-07 @ ec4bdca+dirty
+> Проверено: 2026-10-08 @ 9563e2c+dirty
 
 ## Общее
-NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–3 реализованы (фаза 3 — сообщения, история, `read`: `/api/chats/:id/messages`, `/api/chats/:id/read`; не закоммичена): конфиг, схема БД, формат ошибок, сессии/CSRF, OAuth (Google/GitHub, arctic) по allowlist, `/api/admin/allowlist`, `GET /api/users`. WebSocket нет (фаза 4); события `chat.*` и `message.new` уходят в no-op `NoopChatEvents` (`src/chats/chat-events.ts`), доставки нет до BE-09 (BE-09: WebSocket).
+NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09; не закоммичена): конфиг, схема БД, формат ошибок, сессии/CSRF, OAuth (Google/GitHub, arctic) по allowlist, `/api/admin/allowlist`, `GET /api/users`. События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
 
 ## Что работает
 - `bash scripts/accept.sh`: память, lint, build, unit, e2e на PostgreSQL в Docker Compose.
@@ -13,10 +13,10 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–3 реализованы (фаза
 2. Лимит сообщений (`src/messages/message-rate-limiter.ts`) хранится в памяти процесса: сбрасывается при рестарте, на несколько процессов не рассчитан (BE-D20). `isAdmin` в сессии (BE-06) и повторный вход после удаления из allowlist существующих сессий не обрывает — по спеке.
 
 ## Последняя приёмка
-`bash scripts/accept.sh` → код 0 · 2026-10-07 · ec4bdca+dirty (lint, build, unit 32/32, e2e 93/93, tsc по src и test = 0); ревью фазы 2: nestjs-reviewer APPROVE (после правок финального ревью), ревью BE-13 — APPROVE
+`bash scripts/accept.sh` → код 0 · 2026-10-08 · фаза 4 (lint, build, unit 70/70, e2e 163/163); ревью фазы 4: nestjs-reviewer APPROVE (со 2-го раза)
 
 ## Зависимости от другой стороны
 Контракт auth — во frontend-репозитории (`memory/README.md`); клиенту нужно добавить коды `auth_error=not_allowed` (SH-D12) и `auth_error=login_taken` (BE-D15).
 
 ## Фокус сейчас
-Фаза 2 (BE-07), BE-13 и BE-D15 закрыты. Дальше: коммит по просьбе пользователя, затем планы BE-08 (сообщения) и BE-09 (WebSocket); хвосты — BE-11 и раздел «Хвосты BE-07» в `tasks.md`.
+Фазы 1–4 закрыты. Дальше: BE-15 (подключение клиента к WebSocket), хвосты BE-16, BE-11 и раздел «Хвосты BE-07» в `tasks.md`.
