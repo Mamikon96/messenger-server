@@ -19,6 +19,7 @@ export class AppError extends HttpException {
     status: number,
     readonly code: ErrorCode,
     message: string = code,
+    readonly headers?: Record<string, string>,
   ) {
     super({ error: { code, message } }, status);
   }

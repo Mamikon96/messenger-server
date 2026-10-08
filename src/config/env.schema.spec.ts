@@ -62,4 +62,21 @@ describe('parseEnv', () => {
   it('rejects MAX_GROUP_MEMBERS=1', () => {
     expect(() => parseEnv({ ...valid, MAX_GROUP_MEMBERS: '1' })).toThrow();
   });
+
+  it('defaults message limits', () => {
+    const config = parseEnv(valid);
+    expect(config.maxMessageLength).toBe(4000);
+    expect(config.messageRatePerMinute).toBe(30);
+  });
+
+  it('reads MAX_MESSAGE_LENGTH and MESSAGE_RATE_PER_MINUTE', () => {
+    const config = parseEnv({ ...valid, MAX_MESSAGE_LENGTH: '10', MESSAGE_RATE_PER_MINUTE: '2' });
+    expect(config.maxMessageLength).toBe(10);
+    expect(config.messageRatePerMinute).toBe(2);
+  });
+
+  it('rejects non-positive message limits', () => {
+    expect(() => parseEnv({ ...valid, MAX_MESSAGE_LENGTH: '0' })).toThrow();
+    expect(() => parseEnv({ ...valid, MESSAGE_RATE_PER_MINUTE: 'abc' })).toThrow();
+  });
 });

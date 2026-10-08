@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ChatDto, ChatMemberDto } from './chat.mapper.js';
+import type { ChatDto, ChatMemberDto, ChatMessageDto } from './chat.mapper.js';
 
 /** DI-токен издателя событий чатов; реальная доставка (WebSocket) подставится позже. */
 export const CHAT_EVENTS = Symbol('CHAT_EVENTS');
@@ -11,7 +11,8 @@ export type ChatEvent =
       recipients: string[];
       payload: { chatId: string; title?: string; members?: ChatMemberDto[] };
     }
-  | { type: 'chat.removed'; recipients: string[]; payload: { chatId: string } };
+  | { type: 'chat.removed'; recipients: string[]; payload: { chatId: string } }
+  | { type: 'message.new'; recipients: string[]; payload: ChatMessageDto };
 
 /** Вызывается только после коммита транзакции; получатели передаются явно. */
 export interface ChatEventsPublisher {

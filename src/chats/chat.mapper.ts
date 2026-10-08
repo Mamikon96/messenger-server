@@ -72,6 +72,26 @@ export interface ChatMessageDto {
   createdAt: string;
 }
 
+export interface ChatMessageRow {
+  chatId: string;
+  seq: number;
+  senderId: string;
+  clientId: string;
+  body: string;
+  createdAt: Date;
+}
+
+export function toChatMessageDto(row: ChatMessageRow): ChatMessageDto {
+  return {
+    chatId: row.chatId,
+    seq: row.seq,
+    senderId: row.senderId,
+    clientId: row.clientId,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export interface ChatPeerDto {
   id: string;
   name: string;

@@ -2,7 +2,7 @@
 > Проверено: 2026-10-07 @ ec4bdca+dirty
 
 ## Общее
-NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–2 реализованы (фаза 2 — чаты и участники, `/api/chats*`; не закоммичена; приёмка и ревью пройдены): конфиг, схема БД, формат ошибок, сессии/CSRF, OAuth (Google/GitHub, arctic) по allowlist, `/api/admin/allowlist`, `GET /api/users`. Сообщений и WebSocket нет (фазы 3–4); события `chat.*` уходят в no-op `NoopChatEvents` (`src/chats/chat-events.ts`), доставки нет до BE-09 (BE-09: WebSocket).
+NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–3 реализованы (фаза 3 — сообщения, история, `read`: `/api/chats/:id/messages`, `/api/chats/:id/read`; не закоммичена): конфиг, схема БД, формат ошибок, сессии/CSRF, OAuth (Google/GitHub, arctic) по allowlist, `/api/admin/allowlist`, `GET /api/users`. WebSocket нет (фаза 4); события `chat.*` и `message.new` уходят в no-op `NoopChatEvents` (`src/chats/chat-events.ts`), доставки нет до BE-09 (BE-09: WebSocket).
 
 ## Что работает
 - `bash scripts/accept.sh`: память, lint, build, unit, e2e на PostgreSQL в Docker Compose.
@@ -10,7 +10,7 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–2 реализованы (фаза
 
 ## Известные проблемы
 1. Git-правила и скрипт задач (git-task) отсутствуют (BE-02): репозиторий создан (ветка `main`), remote не настроен.
-2. Лимиты (429), `isAdmin` в сессии (BE-06) и повторный вход после удаления из allowlist существующих сессий не обрывает — по спеке.
+2. Лимит сообщений (`src/messages/message-rate-limiter.ts`) хранится в памяти процесса: сбрасывается при рестарте, на несколько процессов не рассчитан (BE-D20). `isAdmin` в сессии (BE-06) и повторный вход после удаления из allowlist существующих сессий не обрывает — по спеке.
 
 ## Последняя приёмка
 `bash scripts/accept.sh` → код 0 · 2026-10-07 · ec4bdca+dirty (lint, build, unit 32/32, e2e 93/93, tsc по src и test = 0); ревью фазы 2: nestjs-reviewer APPROVE (после правок финального ревью), ревью BE-13 — APPROVE

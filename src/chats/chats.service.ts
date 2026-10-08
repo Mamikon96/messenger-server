@@ -12,6 +12,7 @@ import {
   type ChatPeerDto,
   chatMembersInclude,
   toChatDto,
+  toChatMessageDto,
 } from './chat.mapper.js';
 import type { CreateChatDto } from './dto/create-chat.dto.js';
 
@@ -101,14 +102,14 @@ export class ChatsService {
         lastMessage:
           r.msgSeq === null
             ? null
-            : {
+            : toChatMessageDto({
                 chatId: r.id,
                 seq: r.msgSeq,
                 senderId: r.msgSenderId as string,
                 clientId: r.msgClientId as string,
                 body: r.msgBody as string,
-                createdAt: (r.msgCreatedAt as Date).toISOString(),
-              },
+                createdAt: r.msgCreatedAt as Date,
+              }),
         unreadCount: r.unreadCount,
       };
       const peer = peers.get(r.id);

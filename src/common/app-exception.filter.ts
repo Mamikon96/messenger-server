@@ -26,6 +26,7 @@ export class AppExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     if (exception instanceof AppError) {
+      if (exception.headers) response.set(exception.headers);
       response.status(exception.getStatus()).json(exception.getResponse());
       return;
     }

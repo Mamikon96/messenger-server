@@ -10,6 +10,8 @@ export interface AppConfig {
   sessionCookieName: string;
   sessionTtlDays: number;
   maxGroupMembers: number;
+  maxMessageLength: number;
+  messageRatePerMinute: number;
   firstAdmin: { provider: Provider; login: string };
   oauth: Record<Provider, { clientId: string; clientSecret: string }>;
 }
@@ -36,6 +38,8 @@ const envSchema = z.object({
   SESSION_COOKIE_NAME: z.string().min(1).default('sid'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
   MAX_GROUP_MEMBERS: z.coerce.number().int().min(2).default(100),
+  MAX_MESSAGE_LENGTH: z.coerce.number().int().positive().default(4000),
+  MESSAGE_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
   FIRST_ADMIN: firstAdmin,
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -53,6 +57,8 @@ export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
     sessionCookieName: env.SESSION_COOKIE_NAME,
     sessionTtlDays: env.SESSION_TTL_DAYS,
     maxGroupMembers: env.MAX_GROUP_MEMBERS,
+    maxMessageLength: env.MAX_MESSAGE_LENGTH,
+    messageRatePerMinute: env.MESSAGE_RATE_PER_MINUTE,
     firstAdmin: env.FIRST_ADMIN,
     oauth: {
       google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
