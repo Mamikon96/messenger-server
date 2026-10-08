@@ -1,6 +1,6 @@
 # Контракт ядра: REST, WebSocket и схема БД (BE-03)
 
-Дата: 2026-10-05. Статус: утверждена пользователем; контракт фазы 2 уточнён решениями BE-D16 (2026-10-07).
+Дата: 2026-10-05. Статус: утверждена пользователем; контракт фазы 2 уточнён решениями BE-D16 (2026-10-07), фаз 3–4 — BE-D20, BE-D21, слишком большое тело — BE-D22 (2026-10-09).
 Объём: ядро по фазам 1–4 из `product-agreements.md` (пользователи и сессии, чаты и участники, сообщения и история, реалтайм-доставка и догонка). Presence, typing, медиа, поиск, push, правка/удаление сообщений — отдельные спеки.
 
 ## Цель и ограничения
@@ -23,7 +23,7 @@
 Правила:
 - `last_read_seq` нового участника группы равен `last_seq` чата на момент добавления: история ему не считается непрочитанной. Участники чата с собой — одна строка `chat_members`.
 - Порядок задаёт серверный `seq` внутри чата; время только серверное.
-- Статус `read` выводится из `last_read_seq`; `delivered` в ядро не входит.
+- Чужой `last_read_seq` клиенту не отдаётся (ни в REST, ни в событиях): статус «прочитано собеседником» и `delivered` в ядро не входят.
 - Первый админ создаётся из конфигурации при первом входе соответствующего аккаунта, пока в БД нет администратора; запись об этом аккаунте в `allowlist` не обязательна.
 - Вход по `provider_user_id` (BE-D15): известный и привязанный к allowlist (или админ) аккаунт входит при смене логина/email у провайдера, обновляется запись allowlist (`allowlist.provider_login`); чужой аккаунт со старым логином получает `not_allowed`; известный пользователь, сменивший логин на занятый другим привязанным аккаунтом, получает `/?auth_error=login_taken`. Это значение `auth_error` в редиректе; JSON-ответа с кодом `login_taken` клиент не получает.
 - Пользователь вне allowlist (запись удалена) скрыт из `GET /users`; чаты с ним создавать и добавлять его в группы нельзя (`404 not_found`), существующие чаты и история остаются (BE-D16).
@@ -31,7 +31,7 @@
 
 ## 2. REST API
 
-Все пути под `/api`, тела JSON. Изменяющие запросы (`POST`, `PUT`, `PATCH`, `DELETE`) требуют заголовок `X-CSRF-Token`. Сессия по cookie `HttpOnly; Secure; SameSite=Lax`.
+Все пути под `/api`, тела JSON. Изменяющие запросы (`POST`, `PUT`, `PATCH`, `DELETE`) требуют заголовок `X-CSRF-Token`. Сессия по cookie `HttpOnly; SameSite=Lax`; флаг `Secure` ставится, только если `PUBLIC_URL` начинается с `https://` (в dev по http его нет).
 
 ### Auth
 Как в контракте клиента: `GET /auth/{provider}/start`, `GET /auth/{provider}/callback`, `GET /auth/session`, `POST /auth/logout`. Дополнение: при входе аккаунта, которого нет в allowlist, callback редиректит на `/?auth_error=not_allowed`; если известный пользователь сменил логин на занятый другим привязанным аккаунтом — на `/?auth_error=login_taken`. Тело `session` без изменений (четыре поля `user` и `csrfToken`, без `isAdmin`).
@@ -55,7 +55,7 @@
 
 `ChatDto` — единая форма чата: `{id, type, title, lastSeq, members:[{userId, name, avatarUrl, role}]}`; участники упорядочены по `joined_at`, затем по `userId`. Она же — ответ `POST /chats`, `GET /chats/:id`, `PATCH /chats/:id` и payload события `chat.created`. В `direct` оба участника `member`.
 
-Для чата, в котором пользователь не состоит, возвращается `404 not_found`, а не `403`, чтобы не раскрывать его существование. Права: нехватка прав (не админ, не `owner`) — `403 forbidden`; `403 not_allowed` — только аккаунт вне allowlist при входе. Роль `owner` одна (создатель), передача роли вне объёма.
+Для чата, в котором пользователь не состоит, возвращается `404 not_found`, а не `403`, чтобы не раскрывать его существование. Права: нехватка прав (не админ, не `owner`) — `403 forbidden`; Аккаунт вне allowlist при входе получает не JSON, а редирект `/?auth_error=not_allowed` (`not_allowed` — внутренний код `AppError`, наружу как `error.code` не выходит). Роль `owner` одна (создатель), передача роли вне объёма.
 
 ## 3. WebSocket
 
@@ -82,10 +82,10 @@
 
 ## 4. Ошибки, лимиты, транзакции, тесты
 
-- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `not_allowed`, `forbidden`, `already_exists`, `unauthorized`, `not_found`, `internal_error`, `unsupported_type`. `login_taken` — значение `auth_error` в редиректе входа, не `error.code`. Дубль записи allowlist: `409 already_exists`.
+- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `forbidden`, `already_exists`, `unauthorized`, `not_found`, `internal_error`, `unsupported_type`; значения `not_allowed` и `login_taken` — только `auth_error` в редиректе входа, не `error.code`. Дубль записи allowlist: `409 already_exists`. Тело запроса больше ~100 КБ (лимит body-parser) — `413` с кодом `validation_failed` (BE-D22).
 - Стартовые лимиты (в конфигурации): сообщение до 4 000 символов; до 30 сообщений в минуту на пользователя (`429`); до 100 участников в группе (`MAX_GROUP_MEMBERS`, по умолчанию 100; превышение — `400 validation_failed`).
 - Валидация входов DTO-схемами на границе контроллера. Тело сообщения хранится и отдаётся как текст; санитизацию ссылок делает клиент.
-- Отправка сообщения: одна транзакция — `UPDATE chats SET last_seq = last_seq + 1 ... RETURNING` и `INSERT` в `messages`. Повтор с тем же `clientId` срабатывает на уникальном индексе и возвращает существующее сообщение. Для атомарного `seq` и курсорных запросов допускается raw SQL через Prisma.
+- Отправка сообщения: одна транзакция — `UPDATE chats SET last_seq = last_seq + 1 ... RETURNING` и `INSERT` в `messages`. Повтор с тем же `clientId` находится запросом под блокировкой чата до вставки и возвращает существующее сообщение (уникальный индекс — страховка, P2002 внутри транзакции PostgreSQL обработать нельзя). Для атомарного `seq` и курсорных запросов допускается raw SQL через Prisma.
 - Тесты пишутся до реализации (Vitest + supertest):
   - unit: сервис сообщений (идемпотентность, монотонность `seq`, `last_read_seq` только вперёд), проверки членства и ролей;
   - e2e на реальной PostgreSQL: auth-цикл с подменённым провайдером, чаты, история и догонка, лимиты, CSRF;
@@ -93,7 +93,7 @@
 - Тестовая БД: PostgreSQL в Docker Compose (BE-D08).
 
 ## Не входит в эту спеку
-- WebSocket-доставка (фаза 4), presence и typing, статус `delivered`, медиа, поиск, push, правка и удаление сообщений.
+- Presence и typing, статус `delivered`, медиа, поиск, push, правка и удаление сообщений.
 - `isAdmin` в `GET /auth/session` и админ-UI (BE-06, SH-D12).
 - Горизонтальное масштабирование и воспроизведение пропущенных WebSocket-событий.
 

@@ -177,6 +177,22 @@ describe('Chats (e2e)', () => {
     expect(await prisma.chat.count()).toBe(1);
   });
 
+  it('rejects a request body over the size limit with 413 validation_failed and malformed JSON with 400', async () => {
+    const me = await loginAs(app);
+    const big = await createChat(me, { type: 'group', title: 'x'.repeat(200_000), memberIds: [] });
+    expect(big.status).toBe(413);
+    expect(big.body.error.code).toBe('validation_failed');
+    const broken = await request(app.getHttpServer())
+      .post('/api/chats')
+      .set('Cookie', me.cookie)
+      .set('X-CSRF-Token', me.csrf)
+      .set('Content-Type', 'application/json')
+      .send('{"type":');
+    expect(broken.status).toBe(400);
+    expect(broken.body.error.code).toBe('validation_failed');
+    expect(await prisma.chat.count()).toBe(0);
+  });
+
   it('returns 404 for an unknown user, for a user outside the allowlist, and for a direct chat with such a user even when the chat already exists', async () => {
     const me = await loginAs(app);
     const outsider = await loginAs(app, { allowlisted: false });

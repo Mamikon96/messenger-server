@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Проверка целостности AI-памяти (.ai/memory). Ненулевой код — память битая или устарела по формальным признакам.
 # Проверяет структуру, штамп «Проверено», существование ссылок на файлы, уникальность и формат ID.
-# Содержательную сверку с кодом выполняет агент (скилл project-memory).
+# Содержательную сверку с кодом делает scripts/check-sync.mjs (вызывается в конце): маршруты, коды ошибок, env, WS, схема БД, DTO, ссылки на решения и задачи.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -77,7 +77,7 @@ tasks="$MEM/tasks.md"
 if [ -f "$tasks" ] && git rev-parse --git-dir >/dev/null 2>&1; then
   while IFS= read -r p; do
     [ -f "$p" ] && [ "$p" -nt "$tasks" ] && fail "$p изменён позже $tasks — актуализируй задачи в памяти (и штамп)"
-  done < <(git status --porcelain -uall -- src test scripts package.json 2>/dev/null | awk '{print $NF}')
+  done < <(git status --porcelain -uall -- src test scripts prisma docs .env.example package.json vitest.config.ts vitest.config.e2e.ts 2>/dev/null | awk '{print $NF}')
 fi
 
 # Ссылки на файлы в обратных кавычках должны существовать (src/, test/, scripts/, .ai/, корневые конфиги, ../ относительно файла)
@@ -88,14 +88,21 @@ while IFS= read -r md; do
     path=${ref%%[,.:;)]}
     case $path in *'*'*|*'<'*|*'…'*|*' '*) continue;; esac
     case $path in
-      src/*|test/*|scripts/*|.ai/*|package.json|CLAUDE.md|README.md) target=$path;;
+      src/*|test/*|scripts/*|prisma/*|docs/*|.ai/*|.env.example|package.json|CLAUDE.md|README.md) target=$path;;
       rules/*|memory/*) target=.ai/$path;;
       ../*) target="$dir/$path";;
       *) continue;;
     esac
     [ -e "$target" ] || fail "$md: ссылка на несуществующий путь '$path'"
   done < <(grep -oE '`[^`]+`' "$md" | tr -d '`' | sort -u)
-done < <({ find .ai -name '*.md'; echo CLAUDE.md; })
+done < <({ find .ai -name '*.md'; echo CLAUDE.md; echo docs/client-integration.md; echo docs/superpowers/specs/2026-10-05-core-contract-design.md; })
+
+# Автоприёмка в state.md: строку пишет scripts/accept.sh, формат фиксирован
+grep -qE '^Автоприёмка \(пишет scripts/accept.sh\): код 0 · [0-9]{4}-[0-9]{2}-[0-9]{2} · unit [0-9]+/[0-9]+ · e2e [0-9]+/[0-9]+$' "$MEM/state.md" \
+  || fail "$MEM/state.md: нет строки 'Автоприёмка (пишет scripts/accept.sh): код 0 · ГГГГ-ММ-ДД · unit N/N · e2e N/N' (её пишет accept.sh, руками не править)"
+
+# Сверка кода с контрактом, архитектурой, решениями и задачами (жёсткая: любое расхождение — ошибка)
+node scripts/check-sync.mjs || errors=$((errors + 1))
 
 if [ "$errors" -gt 0 ]; then
   echo "==> Память НЕ прошла проверку: ошибок $errors"

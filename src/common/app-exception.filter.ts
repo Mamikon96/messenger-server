@@ -19,6 +19,13 @@ function codeForStatus(status: number): ErrorCode {
   }
 }
 
+/** body-parser (http-errors) бросает не `HttpException`, а `Error` со `status` 4xx: слишком большое тело, битый JSON. Любая такая ошибка — клиентская: отдаём её статус и `validation_failed`, текст не раскрываем. */
+function clientErrorStatus(exception: unknown): number | undefined {
+  if (!(exception instanceof Error)) return undefined;
+  const status = (exception as { status?: unknown }).status;
+  return typeof status === 'number' && status >= 400 && status < 500 ? status : undefined;
+}
+
 @Catch()
 export class AppExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(AppExceptionFilter.name);
@@ -35,6 +42,12 @@ export class AppExceptionFilter implements ExceptionFilter {
       const code = codeForStatus(status);
       if (status >= 500) this.logger.error(exception.message, exception.stack);
       response.status(status).json({ error: { code, message: code } });
+      return;
+    }
+    const clientStatus = clientErrorStatus(exception);
+    if (clientStatus !== undefined) {
+      const code = codeForStatus(clientStatus);
+      response.status(clientStatus).json({ error: { code, message: code } });
       return;
     }
     this.logger.error(

@@ -48,4 +48,25 @@ describe('AppExceptionFilter', () => {
     const { json } = run(new HttpException('x', status));
     expect(json.mock.calls[0][0].error.code).toBe(code);
   });
+
+  it.each([
+    [413, 'entity.too.large'],
+    [400, 'entity.parse.failed'],
+  ])('maps body-parser error %i (%s) to its status with validation_failed', (status, type) => {
+    const { status: setStatus, json } = run(Object.assign(new Error('x'), { status, type }));
+    expect(setStatus).toHaveBeenCalledWith(status);
+    expect(json.mock.calls[0][0]).toEqual({
+      error: { code: 'validation_failed', message: 'validation_failed' },
+    });
+  });
+
+  it('ignores a non-numeric status field', () => {
+    const { status } = run(Object.assign(new Error('x'), { status: '413' }));
+    expect(status).toHaveBeenCalledWith(500);
+  });
+
+  it('does not treat an arbitrary error with a 5xx status field as a client error', () => {
+    const { status } = run(Object.assign(new Error('x'), { status: 502 }));
+    expect(status).toHaveBeenCalledWith(500);
+  });
 });

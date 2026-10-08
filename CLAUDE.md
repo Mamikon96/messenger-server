@@ -6,7 +6,7 @@
 Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + supertest, линтер oxlint (BE-D04), WebSocket, PostgreSQL (SH-D07). Остальные библиотеки (ORM/драйвер БД, WebSocket-слой и др.) пока не выбраны — по `.ai/rules/tech-approval.md`.
 
 ## Команды
-- `bash scripts/check-memory.sh` — проверка памяти
+- `bash scripts/check-memory.sh` — проверка памяти и жёсткая сверка кода с контрактом/решениями (`scripts/check-sync.mjs`)
 - `npm run start:dev` — запуск с перезагрузкой; `npm run build` — сборка
 - `npm run lint` — oxlint; `npm test` — unit (Vitest, `src/**/*.spec.ts`); `npm run test:e2e` — e2e (`test/*.e2e-spec.ts`)
 - `bash scripts/accept.sh` — приёмка: проверка памяти + lint + build + unit + e2e
