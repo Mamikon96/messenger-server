@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client.js';
 import { ConfigService } from '../config/config.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { parseCookies } from './cookies.js';
@@ -9,6 +10,7 @@ export interface SessionInfo {
   userId: string;
   csrfToken: string;
   expiresAt: Date;
+  createdAt: Date;
 }
 
 export interface AuthenticatedSession extends SessionInfo {
@@ -24,18 +26,24 @@ export class SessionsService {
     private readonly config: ConfigService,
   ) {}
 
-  async create(userId: string): Promise<{ token: string; csrfToken: string; expiresAt: Date }> {
+  /** `db` — клиент транзакции вызывающего (вход/восстановление создают сессию в своей транзакции). */
+  async create(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ token: string; csrfToken: string; expiresAt: Date }> {
     const token = randomBytes(32).toString('base64url');
     const csrfToken = randomBytes(24).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.get().sessionTtlDays * 86_400_000);
-    await this.prisma.session.create({
+    await db.session.create({
       data: { id: hashToken(token), userId, csrfToken, expiresAt },
     });
     return { token, csrfToken, expiresAt };
   }
 
   async find(token: string): Promise<SessionInfo | null> {
-    const session = await this.prisma.session.findUnique({ where: { id: hashToken(token) } });
+    const session = await this.prisma.session.findFirst({
+      where: { id: hashToken(token), user: { disabledAt: null } },
+    });
     if (!session) return null;
     if (session.expiresAt.getTime() <= Date.now()) {
       await this.prisma.session.deleteMany({ where: { id: session.id } });
@@ -46,6 +54,7 @@ export class SessionsService {
       userId: session.userId,
       csrfToken: session.csrfToken,
       expiresAt: session.expiresAt,
+      createdAt: session.createdAt,
     };
   }
 
@@ -60,7 +69,7 @@ export class SessionsService {
   async existingIds(ids: string[]): Promise<Set<string>> {
     if (ids.length === 0) return new Set();
     const rows = await this.prisma.session.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, user: { disabledAt: null } },
       select: { id: true },
     });
     return new Set(rows.map((row) => row.id));
@@ -68,5 +77,11 @@ export class SessionsService {
 
   async destroy(token: string): Promise<void> {
     await this.prisma.session.deleteMany({ where: { id: hashToken(token) } });
+  }
+
+  /** Удаляет все сессии пользователя; возвращает их число. */
+  async revokeAllForUser(userId: string, db: Prisma.TransactionClient = this.prisma): Promise<number> {
+    const { count } = await db.session.deleteMany({ where: { userId } });
+    return count;
   }
 }

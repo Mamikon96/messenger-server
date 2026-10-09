@@ -1,5 +1,4 @@
-import { randomBytes } from 'node:crypto';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Controller, Get, INestApplication, Post, UseGuards } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
@@ -77,6 +76,18 @@ describe('Sessions (e2e)', () => {
       expect(await prisma.session.count()).toBe(0);
     });
 
+    it("revokeAllForUser deletes only that user's sessions", async () => {
+      const other = await prisma.user.create({
+        data: { name: 'o', avatarUrl: '', webauthnUserId: randomBytes(32) },
+      });
+      await sessions.create(userId);
+      await sessions.create(userId);
+      const { token: otherToken } = await sessions.create(other.id);
+      expect(await sessions.revokeAllForUser(userId)).toBe(2);
+      expect(await prisma.session.count()).toBe(1);
+      expect(await sessions.find(otherToken)).not.toBeNull();
+    });
+
     it('destroy removes the session', async () => {
       const { token } = await sessions.create(userId);
       await sessions.destroy(token);
@@ -142,9 +153,35 @@ describe('Sessions (e2e)', () => {
         userId,
         csrfToken,
         expiresAt,
+        createdAt: expect.any(Date),
         token,
         sessionId: hash(token),
       });
+    });
+
+    it('authenticate returns createdAt', async () => {
+      const before = Date.now();
+      const { token } = await sessions.create(userId);
+      const result = await sessions.authenticate(`sid=${token}`);
+      expect(result?.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(result?.createdAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
+    it('authenticate returns null for a session of a disabled user', async () => {
+      const { token } = await sessions.create(userId);
+      await prisma.user.update({ where: { id: userId }, data: { disabledAt: new Date() } });
+      expect(await sessions.authenticate(`sid=${token}`)).toBeNull();
+    });
+
+    it('existingIds skips sessions of disabled users', async () => {
+      const { token } = await sessions.create(userId);
+      const other = await prisma.user.create({
+        data: { name: 'o', avatarUrl: '', webauthnUserId: randomBytes(32) },
+      });
+      const { token: otherToken } = await sessions.create(other.id);
+      await prisma.user.update({ where: { id: userId }, data: { disabledAt: new Date() } });
+      const ids = await sessions.existingIds([hash(token), hash(otherToken)]);
+      expect([...ids]).toEqual([hash(otherToken)]);
     });
 
     it('deletes and rejects an expired session', async () => {

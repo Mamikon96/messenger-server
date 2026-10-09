@@ -7,6 +7,7 @@ export interface RequestSession {
   token: string;
   userId: string;
   csrfToken: string;
+  createdAt: Date;
 }
 
 export type SessionRequest = Request & { session: RequestSession };
@@ -23,6 +24,7 @@ export class SessionGuard implements CanActivate {
       token: session.token,
       userId: session.userId,
       csrfToken: session.csrfToken,
+      createdAt: session.createdAt,
     };
     return true;
   }
