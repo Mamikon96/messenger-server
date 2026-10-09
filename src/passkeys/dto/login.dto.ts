@@ -11,7 +11,7 @@ const authenticationCredentialSchema = z.looseObject({
     clientDataJSON: z.string().min(1),
     authenticatorData: z.string().min(1),
     signature: z.string().min(1),
-    userHandle: z.string().max(1024).optional(),
+    userHandle: z.string().max(1024).nullable().optional(),
   }),
 });
 

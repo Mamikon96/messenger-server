@@ -57,6 +57,26 @@ describe('Public guards (e2e)', () => {
     expect(res.headers['retry-after']).toBeDefined();
   });
 
+  it('one IP bucket is shared by passkey and invite endpoints (full AppModule)', async () => {
+    vi.stubEnv('AUTH_RATE_PER_MINUTE', '2');
+    app = await createTestApp();
+    const server = app.getHttpServer();
+    const origin = 'http://localhost:3000';
+    for (let i = 0; i < 2; i++) {
+      await request(server)
+        .post('/api/auth/passkey/login/options')
+        .set('Origin', origin)
+        .send({})
+        .expect(200);
+    }
+    const res = await request(server)
+      .post('/api/invites/inspect')
+      .set('Origin', origin)
+      .send({ token: 'x' })
+      .expect(429);
+    expect(res.body.error.code).toBe('rate_limited');
+  });
+
   it('with TRUST_PROXY=1 different X-Forwarded-For values get separate buckets', async () => {
     app = await appWithEnv({ AUTH_RATE_PER_MINUTE: '1', TRUST_PROXY: '1' });
     const server = app.getHttpServer();

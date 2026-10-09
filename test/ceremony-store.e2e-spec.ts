@@ -8,7 +8,7 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { CeremonyStore } from '../src/webauthn/ceremony-store.js';
 import { PasskeyStore } from '../src/webauthn/passkey-store.js';
 import { WebauthnModule } from '../src/webauthn/webauthn.module.js';
-import { WebauthnService } from '../src/webauthn/webauthn.service.js';
+import { type NewPasskey, WebauthnService } from '../src/webauthn/webauthn.service.js';
 import { FakeAuthenticator } from './support/fake-authenticator.js';
 import { resetDb } from './support/db.js';
 
@@ -162,5 +162,30 @@ describe('WebAuthn ceremonies', () => {
         transports: passkey.transports,
       }),
     );
+  });
+
+  it('parallel PasskeyStore.insert with the same id: one succeeds, the other gets auth_failed (not P2002)', async () => {
+    const owner = await prisma.user.create({
+      data: { name: 'Owner', avatarUrl: '', webauthnUserId: randomBytes(32) },
+    });
+    const passkey: NewPasskey = {
+      id: 'dup-credential',
+      publicKey: new Uint8Array([1, 2, 3]),
+      counter: 0n,
+      transports: [],
+      deviceType: 'multiDevice',
+      backedUp: true,
+    };
+    for (let round = 0; round < 5; round++) {
+      await prisma.passkey.deleteMany();
+      const results = await Promise.allSettled(
+        [1, 2].map(() => prisma.$transaction((tx) => passkeys.insert(tx, owner.id, passkey, 'k'))),
+      );
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(AppError);
+      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject(authFailed);
+    }
   });
 });

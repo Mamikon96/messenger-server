@@ -126,7 +126,7 @@ export class WebauthnService {
   // в лог идёт только сообщение библиотеки, без тела ответа
   private failed(stage: string, error: unknown): AppError {
     this.logger.warn(
-      `WebAuthn ${stage} failed: ${error instanceof Error ? error.message : String(error)}`,
+      `WebAuthn ${stage} failed: ${(error instanceof Error ? error.message : String(error)).replace(/[\r\n]/g, ' ')}`,
     );
     return new AppError(401, 'auth_failed');
   }

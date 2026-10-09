@@ -24,6 +24,8 @@ export class PasskeyStore {
     passkey: NewPasskey,
     name: string,
   ): Promise<PasskeyItem> {
+    // сериализует параллельные вставки одного id (xact-lock снимается с концом транзакции вызывающего)
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'passkey:' + passkey.id}, 0))`;
     const existing = await tx.passkey.findUnique({
       where: { id: passkey.id },
       select: { id: true },

@@ -186,10 +186,17 @@ export class PasskeyAuthService {
       const row = locked[0];
       if (!row) throw new AppError(401, 'auth_failed');
       if (row.disabled_at) throw new AppError(403, 'user_disabled');
-      await tx.passkey.update({
-        where: { id: stored.id },
+      // условное обновление: счётчик не уходит назад; удалённый между чтением и транзакцией ключ даёт count = 0.
+      // Синхронизируемые passkey всегда сообщают counter 0 — ветка `counter: 0n` это допускает.
+      const updated = await tx.passkey.updateMany({
+        where: {
+          id: stored.id,
+          userId: stored.userId,
+          OR: [{ counter: { lt: newCounter } }, { counter: 0n }],
+        },
         data: { counter: newCounter, lastUsedAt: new Date() },
       });
+      if (updated.count === 0) throw new AppError(401, 'auth_failed');
       if (previousSessionToken) await this.sessions.destroy(previousSessionToken, tx);
       const session = await this.sessions.create(row.id, tx);
       return {

@@ -1,5 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { vi } from 'vitest';
+import { WebauthnService } from '../src/webauthn/webauthn.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './support/create-app.js';
 import { type TestLogin, loginAs, resetDb } from './support/db.js';
@@ -116,6 +118,93 @@ describe('Passkey login (e2e)', () => {
     const credential = auth.getAssertion(options.body, { userHandle: null });
     const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
+  });
+
+  it('userHandle null -> 401 auth_failed (not 400)', async () => {
+    const { auth } = await newUser('Alice');
+    const options = await loginOptions().expect(200);
+    const credential = auth.getAssertion(options.body);
+    credential.response.userHandle = null as unknown as string;
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    expect(res.body.error.code).toBe('auth_failed');
+  });
+
+  it('foreign origin -> 401 auth_failed and no new session', async () => {
+    const { auth } = await newUser('Alice');
+    const sessions = await prisma.session.count();
+    const options = await loginOptions().expect(200);
+    const credential = auth.getAssertion(options.body, { origin: 'http://evil.example' });
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    expect(res.body.error.code).toBe('auth_failed');
+    expect(await prisma.session.count()).toBe(sessions);
+  });
+
+  it('foreign rpId (authData rpIdHash) -> 401 auth_failed and no new session', async () => {
+    const { auth } = await newUser('Alice');
+    const registered = await prisma.passkey.findFirstOrThrow();
+    // аутентификатор с ключом для чужого RP; credentialId подменён на зарегистрированный,
+    // поэтому сервер находит ключ, а в authData оказывается хеш чужого rpId
+    const foreign = new FakeAuthenticator({ rpId: 'evil.example' });
+    foreign.createCredential({
+      challenge: 'c',
+      rp: { name: 'evil', id: 'evil.example' },
+      user: { id: Buffer.from(registered.userId).toString('base64url'), name: 'a', displayName: 'a' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+    });
+    const sessions = await prisma.session.count();
+    const options = await loginOptions().expect(200);
+    const credential = foreign.getAssertion(options.body, {
+      credentialId: foreign.credentialIds[0],
+    });
+    credential.id = registered.id;
+    credential.rawId = registered.id;
+    const handle = await prisma.user.findFirstOrThrow({ where: { id: registered.userId } });
+    credential.response.userHandle = Buffer.from(handle.webauthnUserId).toString('base64url');
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    expect(res.body.error.code).toBe('auth_failed');
+    expect(await prisma.session.count()).toBe(sessions);
+  });
+
+  // подмена между проверкой подписи и транзакцией: окно гонки детерминированно
+  async function mutateAfterVerify(mutate: () => Promise<unknown>) {
+    const webauthn = app.get(WebauthnService);
+    const original = webauthn.verifyAuthentication.bind(webauthn);
+    const spy = vi.spyOn(webauthn, 'verifyAuthentication').mockImplementation(async (...args) => {
+      const result = await original(...args);
+      await mutate();
+      return result;
+    });
+    return spy;
+  }
+
+  it('passkey deleted between lookup and transaction -> 401 auth_failed (not 500), no new session', async () => {
+    const { auth } = await newUser('Alice');
+    const sessions = await prisma.session.count();
+    const options = await loginOptions().expect(200);
+    const credential = auth.getAssertion(options.body);
+    const spy = await mutateAfterVerify(() => prisma.passkey.deleteMany());
+    try {
+      const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+      expect(res.body.error.code).toBe('auth_failed');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await prisma.session.count()).toBe(sessions);
+  });
+
+  it('counter moved forward between verification and transaction -> 401 auth_failed, counter not moved back', async () => {
+    const { auth } = await newUser('Alice');
+    const sessions = await prisma.session.count();
+    const options = await loginOptions().expect(200);
+    const credential = auth.getAssertion(options.body);
+    const spy = await mutateAfterVerify(() => prisma.passkey.updateMany({ data: { counter: 1000n } }));
+    try {
+      await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await prisma.passkey.findFirstOrThrow()).counter).toBe(1000n);
+    expect(await prisma.session.count()).toBe(sessions);
   });
 
   it('uv:false -> 401', async () => {

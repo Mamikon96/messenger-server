@@ -8,6 +8,5 @@ import { AdminGuard } from './admin.guard.js';
   imports: [SessionsModule],
   controllers: [AdminUsersController],
   providers: [AdminGuard, AdminUsersService],
-  exports: [AdminGuard],
 })
 export class AdminModule {}
