@@ -1,17 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-09 @ 9be205b+dirty
+> Проверено: 2026-10-10 @ a77f704+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-21 (P1)** Замена OAuth (Google/GitHub) на вход по passkeys (WebAuthn) с одноразовыми инвайт-ссылками. Решения: SH-D14, BE-D24–BE-D30. План: `docs/superpowers/plans/2026-10-09-passkeys-invites.md`, исполнение subagent-driven в ветке `feature/be-21-passkeys` (от `feature/be-17-client-questions`).
-  - Сделано: задачи 1–9 плана (схема и миграция `20261009120000_passkeys_invites`, программный аутентификатор, лимитер по IP/`OriginGuard`/`trust proxy`/отзыв сессий, церемонии WebAuthn, инвайты и админка пользователей, регистрация по инвайту и восстановление, вход без логина, «мои ключи», CLI `npm run admin:invite`) — каждая с ревью `nestjs-reviewer`; задача 10 (спека, `docs/client-integration.md`, `architecture.md`, README, `scripts/check-sync.mjs`) — выполнена, идёт приёмка.
-  - Осталось:
-    - `bash scripts/accept.sh` = 0 и коммит задачи 10;
-    - финальное ревью всей ветки и исправление его замечаний (накопленные minor — в журнале исполнения);
-    - слияние в `develop` — по решению пользователя (git-flow).
-  - Зависит от: SH-D14, BE-D24–BE-D30.
+(нет)
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
@@ -22,6 +16,7 @@
 - `pg` — runtime-зависимость адаптера Prisma — объявлена в `devDependencies` (BE-D18); перенести в `dependencies`, если понадобится прямой импорт в prod-коде.
 
 ## Бэклог
+- **BE-23 (P3, хвосты BE-21, MINOR ревью)** Нет гарантии «остаётся хотя бы один активный админ» при взаимном снятии/отключении двумя админами (`src/admin/admin-users.service.ts`; нужен код ошибки — решение пользователя; сейчас восстановление — `npm run admin:invite`); `GET /api/admin/invites` не отдаёт `createdById`, инвайты отключённого админа не отзываются; тест чужого rpId при входе подписывает чужим ключом (нужна опция `rpIdOverride` в `test/support/fake-authenticator.ts`); тест гонки «отключение ↔ вход» не доказывает оба порядка; типы DTO (`CreateInviteDto`, `RegistrationVerifyDto`, `LoginVerifyDto`) написаны вручную вместо `z.infer`; касты `Uint8Array<ArrayBuffer>` → `Uint8Array_`; пробелы покрытия: `claim()` отдельно, граница `passkeyName` 65/пусто на verify, CSRF только на `/me/passkeys/options`, упавший `verifyRegistration` в «моих ключах», «прежняя сессия переживает неудачный вход», байты `webauthnUserId` в тесте церемоний, «активный ключ переживает sweep», `afterEach` → `app?.close()` в `test/guards.e2e-spec.ts`; шум `ExperimentalWarning` (Web Crypto) в e2e; `npm audit`: 4 high транзитивно через `prisma` (были до BE-21); `docs/open-questions.md` п. BE-06 не помечен закрытым.
 - **BE-22 (P1, клиент `messenger-client-react`)** Перейти на вход по passkey (BE-21, `docs/client-integration.md` §2): экран входа (`/api/auth/passkey/login/*`), страница `/invite#token` (проверка инвайта, ввод имени и имени ключа, регистрация), раздел «Мои ключи» (`/api/me/passkeys`, повторный вход при `403 reauth_required`), админка инвайтов и пользователей (`/api/admin/invites`, `/api/admin/users`); выход из системы только при `401 unauthorized` (`401 auth_failed` — неудачная церемония); удалить обработку `auth_error` и кнопки Google/GitHub. Зависит от: BE-21.
 - **BE-20 (P2)** Статус «прочитано собеседником»: `lastReadSeq` в составе участников (`ChatMemberDto`) и/или WS-событие о чтении (в т. ч. для других вкладок читающего — расхождение `unreadCount`). Нужно решение пользователя по форме (событие `chat.read`, кому рассылать). Зависит от: BE-D23, решения пользователя.
 - **BE-15 (P1, клиент `messenger-client-react`)** Подключить WebSocket: `/ws` в `setupProxy.js` с `ws: true`; `ALLOWED_ORIGINS=http://localhost:3000`; реакция на `1006` до `open` (→ `GET /api/auth/session`: 401 — экран входа, иначе реконнект с backoff и догонкой `since`), `4401`, `4008`; правила порядка событий (спека §3: `message.new` для неизвестного чата → `GET /chats/:id`, разрыв `seq` → `since`, `message.new` после `chat.removed` игнорировать).
@@ -33,6 +28,7 @@
 - **BE-06 (P3, техдолг)** Добавить `isAdmin` в тело `GET /api/auth/session`, чтобы клиент мог показывать админ-UI: расширение auth-контракта клиента и правка клиента (SH-D12). Зависит от: BE-03 (фаза 1), согласования с клиентом.
 
 ## Сделано
+- 2026-10-10 — BE-21: вход через Google/GitHub OAuth и allowlist заменён на passkeys (WebAuthn, `@simplewebauthn/server`) с одноразовыми инвайтами от админа: схема и миграция `20261009120000_passkeys_invites`, церемонии в БД, общий лимит по IP + `OriginGuard` + `TRUST_PROXY`, инвайты и восстановление, вход без логина, «мои ключи», админка инвайтов и пользователей (`users.disabled_at`), CLI `npm run admin:invite`; спека, `docs/client-integration.md`, README, `check-sync` без `auth_error` (решения SH-D14, BE-D24–BE-D30; план `docs/superpowers/plans/2026-10-09-passkeys-invites.md`; приёмка: `bash scripts/accept.sh` → 0, unit 89/89, e2e 229/229; ревью: nestjs-reviewer по каждой из 10 задач и финальное ревью ветки — APPROVE после одного захода исправлений). Ветка `feature/be-21-passkeys` (поверх `feature/be-17-client-questions`), в `develop` не слита. Хвосты — BE-23, клиент — BE-22
 - 2026-10-09 — Порт бэкенда зафиксирован: `PORT=3333` (дефолт в `src/config/env.schema.ts`, `.env.example`); `PUBLIC_URL`/`ALLOWED_ORIGINS` остаются origin'ом dev-сервера клиента (`http://localhost:3000`). Клиенту: прокси `/api` и `/ws` в `setupProxy.js` → `http://localhost:3333`.
 - 2026-10-09 — BE-17: вопросы клиента закрыты решением BE-D23: `seq` без пропусков закреплён в контракте; `GET /chats/:id/messages` → `{messages, hasMore}` (ломающее изменение формы; код, e2e, спека, client-integration); история новым участникам — вся; пустое имя Google/GitHub → запасное (`profile-mappers.ts`, unit); rate limit на вход не нужен. `lastReadSeq`/событие чтения вынесены в BE-20 (приёмка: `bash scripts/accept.sh` → 0; ревью: nestjs-reviewer APPROVE)
 - 2026-10-09 — BE-19: слишком большое тело запроса даёт `413 validation_failed` вместо `500` (`src/common/app-exception.filter.ts`: ошибки body-parser со `status` 4xx; unit + e2e; решение BE-D22; приёмка: `bash scripts/accept.sh` → 0; ревью: nestjs-reviewer APPROVE WITH FIXES, minor исправлены)

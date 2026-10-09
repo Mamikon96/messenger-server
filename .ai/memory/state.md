@@ -1,8 +1,8 @@
 # Состояние backend
-> Проверено: 2026-10-09 @ 9be205b+dirty
+> Проверено: 2026-10-10 @ a77f704+dirty
 
 ## Общее
-NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Вход — passkeys (WebAuthn, `@simplewebauthn/server`) по одноразовым инвайтам от админа, восстановление по ссылке от админа, «мои ключи», админка инвайтов и пользователей (`users.disabled_at`), первый админ — CLI `npm run admin:invite` (BE-21, SH-D14, BE-D24–BE-D30; ветка `feature/be-21-passkeys`, не слита). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
+NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Вход — passkeys (WebAuthn, `@simplewebauthn/server`) по одноразовым инвайтам от админа, восстановление по ссылке от админа, «мои ключи», админка инвайтов и пользователей (`users.disabled_at`), первый админ — CLI `npm run admin:invite` (BE-21, SH-D14, BE-D24–BE-D30; ветка `feature/be-21-passkeys`, не слита в `develop`). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
 
 ## Что работает
 - `bash scripts/accept.sh`: память, lint, build, unit, e2e на PostgreSQL в Docker Compose.
@@ -20,4 +20,4 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза
 Клиент должен перейти на вход по passkey (BE-22, `docs/client-integration.md` §2); его `auth-contract.md` устарел (OAuth).
 
 ## Фокус сейчас
-BE-21: приёмка задачи 10 и финальное ревью ветки. Дальше: BE-22, BE-15 (подключение клиента к WebSocket), хвосты BE-16, BE-11 и раздел «Хвосты BE-07» в `tasks.md`.
+BE-21 готов (приёмка и ревью пройдены), ждёт слияния в `develop` вместе с BE-17. Дальше: BE-22 (клиент на passkeys), BE-15 (подключение клиента к WebSocket), хвосты BE-16, BE-11 и раздел «Хвосты BE-07» в `tasks.md`.
