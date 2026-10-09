@@ -9,6 +9,11 @@ import type { ListMessagesDto } from './dto/list-messages.dto.js';
 import type { SendMessageDto } from './dto/send-message.dto.js';
 import { MessageRateLimiter } from './message-rate-limiter.js';
 
+export interface MessagePageDto {
+  messages: ChatMessageDto[];
+  hasMore: boolean;
+}
+
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 @Injectable()
@@ -68,23 +73,33 @@ export class MessagesService {
     return { message: result.message, created: result.created };
   }
 
-  /** `since` — догонка (по возрастанию), иначе страница истории до `before`; ответ всегда по возрастанию `seq`. */
-  async list(userId: string, chatId: string, query: ListMessagesDto): Promise<ChatMessageDto[]> {
+  /**
+   * `since` — догонка (по возрастанию), иначе страница истории до `before`; ответ всегда по возрастанию `seq`.
+   * Читается `limit + 1` строк: лишняя строка — признак `hasMore` (BE-D23).
+   */
+  async list(userId: string, chatId: string, query: ListMessagesDto): Promise<MessagePageDto> {
     await this.access.requireMember(this.prisma, chatId, userId);
+    const take = query.limit + 1;
     if (query.since !== undefined) {
       const rows = await this.prisma.message.findMany({
         where: { chatId, seq: { gt: query.since } },
         orderBy: { seq: 'asc' },
-        take: query.limit,
+        take,
       });
-      return rows.map(toChatMessageDto);
+      return {
+        messages: rows.slice(0, query.limit).map(toChatMessageDto),
+        hasMore: rows.length > query.limit,
+      };
     }
     const rows = await this.prisma.message.findMany({
       where: { chatId, ...(query.before !== undefined ? { seq: { lt: query.before } } : {}) },
       orderBy: { seq: 'desc' },
-      take: query.limit,
+      take,
     });
-    return rows.reverse().map(toChatMessageDto);
+    return {
+      messages: rows.slice(0, query.limit).reverse().map(toChatMessageDto),
+      hasMore: rows.length > query.limit,
+    };
   }
 
   /** `last_read_seq` двигается только вперёд; `seq` больше `last_seq` чата — `400`. */

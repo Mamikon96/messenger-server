@@ -45,7 +45,7 @@ describe('check-sync', () => {
     ['a reference to a task that does not exist', '.ai/memory/state.md', (t) => `${t}\nСм. BE-999.\n`, /BE-999/],
     ['an unconditional Secure cookie claim', SPEC, (t) => t.replace('`HttpOnly; SameSite=Lax`', '`HttpOnly; Secure; SameSite=Lax`'), /Secure/],
     ['a default page size that differs from docs', 'src/messages/dto/list-messages.dto.ts', (t) => t.replace('DEFAULT_LIMIT = 50', 'DEFAULT_LIMIT = 51'), /messages\.limit\.default/],
-    ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => t.replace('(см. 8б.5)', '(см. 8б.99)'), /8б\.99/],
+    ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => `${t}\nСм. 8б.99.\n`, /8б\.99/],
   ])('fails on %s', (_name, rel, fn, pattern) => {
     edit(rel, fn);
     const { errors } = runChecks(dir);

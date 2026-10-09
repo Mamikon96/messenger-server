@@ -18,6 +18,13 @@ describe('githubProfile', () => {
     );
   });
 
+  it('falls back to login when name is empty or blank', () => {
+    expect(githubProfile({ id: 7, login: 'octocat', name: '', avatar_url: '' }).name).toBe('octocat');
+    expect(githubProfile({ id: 7, login: 'octocat', name: '  ', avatar_url: '' }).name).toBe(
+      'octocat',
+    );
+  });
+
   it('throws when id is missing instead of producing "undefined"', () => {
     expect(() => githubProfile({ login: 'octocat', name: null, avatar_url: '' })).toThrow();
   });
@@ -52,6 +59,11 @@ describe('googleProfile', () => {
     const bare = googleProfile({ ...claims, name: undefined, given_name: undefined });
     expect(bare.name).toBe('Пользователь');
     expect(bare.name).not.toContain('@');
+  });
+
+  it('skips empty or blank name and given_name', () => {
+    expect(googleProfile({ ...claims, name: '', given_name: 'Ann' }).name).toBe('Ann');
+    expect(googleProfile({ ...claims, name: ' ', given_name: '' }).name).toBe('Пользователь');
   });
 
   it('uses an empty avatar when there is no picture', () => {

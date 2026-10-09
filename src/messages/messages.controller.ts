@@ -18,7 +18,7 @@ import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/s
 import { type ListMessagesDto, listMessagesSchema } from './dto/list-messages.dto.js';
 import { type ReadChatDto, readChatSchema } from './dto/read-chat.dto.js';
 import { type SendMessageDto, sendMessageSchema } from './dto/send-message.dto.js';
-import { MessagesService } from './messages.service.js';
+import { type MessagePageDto, MessagesService } from './messages.service.js';
 
 @Controller('chats/:id')
 @UseGuards(SessionGuard, CsrfGuard)
@@ -43,7 +43,7 @@ export class MessagesController {
     @Param('id', ParseUUIDPipe) chatId: string,
     @Query(new ZodValidationPipe(listMessagesSchema)) query: ListMessagesDto,
     @CurrentSession() session: RequestSession,
-  ): Promise<ChatMessageDto[]> {
+  ): Promise<MessagePageDto> {
     return this.messages.list(session.userId, chatId, query);
   }
 

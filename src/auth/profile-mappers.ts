@@ -19,12 +19,16 @@ const googleClaimsSchema = z.object({
 
 export const FALLBACK_NAME = 'Пользователь';
 
+// Пустое или пробельное имя считается отсутствующим (BE-D23).
+const nonBlank = (value: string | null | undefined): string | undefined =>
+  value?.trim() ? value : undefined;
+
 export function githubProfile(raw: unknown): OAuthProfile {
   const user = githubUserSchema.parse(raw);
   return {
     providerUserId: String(user.id),
     login: user.login,
-    name: user.name ?? user.login,
+    name: nonBlank(user.name) ?? user.login,
     avatarUrl: user.avatar_url,
   };
 }
@@ -35,7 +39,7 @@ export function googleProfile(raw: unknown): OAuthProfile {
   return {
     providerUserId: claims.sub,
     login: claims.email,
-    name: claims.name ?? claims.given_name ?? FALLBACK_NAME,
+    name: nonBlank(claims.name) ?? nonBlank(claims.given_name) ?? FALLBACK_NAME,
     avatarUrl: claims.picture ?? '',
   };
 }

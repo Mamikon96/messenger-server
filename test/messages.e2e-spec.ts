@@ -245,7 +245,7 @@ describe('Messages (e2e)', () => {
       }
       return ctx;
     }
-    const seqs = (res: request.Response) => res.body.map((m: { seq: number }) => m.seq);
+    const seqs = (res: request.Response) => res.body.messages.map((m: { seq: number }) => m.seq);
 
     it('requires a session; 404 for non-member; 400 for bad uuid', async () => {
       const { chatId } = await seeded(1);
@@ -259,7 +259,7 @@ describe('Messages (e2e)', () => {
       const { alice, chatId } = await seeded(3);
       const res = await history(alice, chatId).expect(200);
       expect(seqs(res)).toEqual([1, 2, 3]);
-      expect(res.body[0]).toEqual({
+      expect(res.body.messages[0]).toEqual({
         chatId,
         seq: 1,
         senderId: alice.userId,
@@ -271,7 +271,7 @@ describe('Messages (e2e)', () => {
 
     it('is empty for a chat without messages', async () => {
       const { alice, chatId } = await directChat();
-      expect((await history(alice, chatId).expect(200)).body).toEqual([]);
+      expect((await history(alice, chatId).expect(200)).body).toEqual({ messages: [], hasMore: false });
     });
 
     it('pages back with before (exclusive) and limit, ascending within a page', async () => {
@@ -290,6 +290,28 @@ describe('Messages (e2e)', () => {
       expect(seqs(await history(alice, chatId, '?since=100').expect(200))).toEqual([]);
     });
 
+    it('reports hasMore in the direction of the request', async () => {
+      const { alice, chatId } = await seeded(7);
+      const more = async (query: string) => (await history(alice, chatId, query).expect(200)).body.hasMore;
+      expect(await more('')).toBe(false);
+      expect(await more('?limit=7')).toBe(false);
+      expect(await more('?limit=6')).toBe(true);
+      expect(await more('?before=5&limit=3')).toBe(true);
+      expect(await more('?before=4&limit=3')).toBe(false);
+      expect(await more('?since=0&limit=7')).toBe(false);
+      expect(await more('?since=0&limit=6')).toBe(true);
+      expect(await more('?since=4&limit=3')).toBe(false);
+      expect(await more('?since=3&limit=3')).toBe(true);
+      expect(await more('?since=7')).toBe(false);
+    });
+
+    it('does not spend a seq on a send rejected by validation', async () => {
+      const { alice, chatId } = await seeded(2);
+      await send(alice, chatId, { clientId: randomUUID(), body: 'a\u0000b' }).expect(400);
+      await send(alice, chatId, msg('m3')).expect(201);
+      expect(seqs(await history(alice, chatId).expect(200))).toEqual([1, 2, 3]);
+    });
+
     it('caps the default page at 50 and rejects limit above 100', async () => {
       const { alice, chatId } = await directChat();
       await prisma.$executeRaw`
@@ -298,11 +320,11 @@ describe('Messages (e2e)', () => {
         FROM generate_series(1, 120) g`;
       await prisma.chat.update({ where: { id: chatId }, data: { lastSeq: 120 } });
       const page = await history(alice, chatId).expect(200);
-      expect(page.body).toHaveLength(50);
-      expect(page.body[0].seq).toBe(71);
-      expect((await history(alice, chatId, '?limit=100').expect(200)).body).toHaveLength(100);
+      expect(page.body.messages).toHaveLength(50);
+      expect(page.body.messages[0].seq).toBe(71);
+      expect((await history(alice, chatId, '?limit=100').expect(200)).body.messages).toHaveLength(100);
       await history(alice, chatId, '?limit=101').expect(400);
-      expect((await history(alice, chatId, '?since=0').expect(200)).body).toHaveLength(50);
+      expect((await history(alice, chatId, '?since=0').expect(200)).body.messages).toHaveLength(50);
     });
 
     it.each([
