@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/server';
 import { AppError } from '../common/app-error.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { RequestSession } from '../sessions/session.guard.js';
 import { CeremonyStore } from '../webauthn/ceremony-store.js';
@@ -84,9 +85,19 @@ export class MePasskeysService {
   }
 
   async rename(userId: string, id: string, name: string): Promise<PasskeyItem> {
-    const { count } = await this.prisma.passkey.updateMany({ where: { id, userId }, data: { name } });
-    if (count === 0) throw new AppError(404, 'not_found');
-    return this.prisma.passkey.findUniqueOrThrow({ where: { id }, select: ITEM_SELECT });
+    // update по { id, userId } атомарен: чужой, удалённый или неизвестный ключ -> P2025 -> 404
+    try {
+      return await this.prisma.passkey.update({
+        where: { id, userId },
+        data: { name },
+        select: ITEM_SELECT,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new AppError(404, 'not_found');
+      }
+      throw error;
+    }
   }
 
   /** Блокировка строки пользователя сериализует параллельные удаления: последний ключ не удалить. */
