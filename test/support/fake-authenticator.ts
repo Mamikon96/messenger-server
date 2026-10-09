@@ -186,11 +186,9 @@ export class FakeAuthenticator {
   ): StoredCredential {
     const rpId = options.rpId ?? this.rpId;
     const allowed = options.allowCredentials?.map((c) => c.id) ?? [];
-    const candidates = this.credentials.filter(
-      (c) => c.rpId === rpId || c.rpId === this.rpId,
-    );
+    const candidates = this.credentials.filter((c) => c.rpId === rpId);
     const found = credentialId
-      ? candidates.find((c) => c.id === credentialId)
+      ? this.credentials.find((c) => c.id === credentialId)
       : allowed.length > 0
         ? candidates.find((c) => allowed.includes(c.id))
         : candidates[candidates.length - 1];

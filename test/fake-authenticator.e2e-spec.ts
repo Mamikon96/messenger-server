@@ -84,7 +84,7 @@ describe('FakeAuthenticator', () => {
         expectedRPID: RP_ID,
         requireUserVerification: true,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/User verification/);
 
     const { verification } = await register(auth);
     const authOptions = await generateAuthenticationOptions({ rpID: RP_ID });
@@ -98,7 +98,7 @@ describe('FakeAuthenticator', () => {
         requireUserVerification: true,
         credential: verification.registrationInfo!.credential,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/User verification/);
   });
 
   it('foreign origin fails verification', async () => {
@@ -115,7 +115,7 @@ describe('FakeAuthenticator', () => {
         expectedRPID: RP_ID,
         requireUserVerification: true,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/origin/);
 
     const { verification } = await register(auth);
     const authOptions = await generateAuthenticationOptions({ rpID: RP_ID });
@@ -131,7 +131,7 @@ describe('FakeAuthenticator', () => {
         requireUserVerification: true,
         credential: verification.registrationInfo!.credential,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/origin/);
   });
 
   it('foreign rpId fails registration and authentication when expectedRPID is passed', async () => {
@@ -146,15 +146,21 @@ describe('FakeAuthenticator', () => {
         expectedRPID: RP_ID,
         requireUserVerification: true,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/RP ID hash/);
 
-    // ключ, зарегистрированный у честного RP, и подпись authData с чужим rpId
-    const honest = new FakeAuthenticator();
-    const { verification } = await register(honest);
-    const swapped = new FakeAuthenticator({ rpId: 'evil.example' });
-    swapped.createCredential(await regOptions());
+    // тот же ключ валидно регистрируется у чужого RP; подпись корректна,
+    // не совпадает только хеш RP ID
+    const registered = await verifyRegistrationResponse({
+      response,
+      expectedChallenge: options.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: 'evil.example',
+      requireUserVerification: true,
+    });
     const authOptions = await generateAuthenticationOptions({ rpID: RP_ID });
-    const assertion = swapped.getAssertion(authOptions);
+    const assertion = foreign.getAssertion(authOptions, {
+      credentialId: response.id,
+    });
     await expect(
       verifyAuthenticationResponse({
         response: assertion,
@@ -162,11 +168,8 @@ describe('FakeAuthenticator', () => {
         expectedOrigin: ORIGIN,
         expectedRPID: RP_ID,
         requireUserVerification: true,
-        credential: {
-          ...verification.registrationInfo!.credential,
-          id: assertion.id,
-        },
+        credential: registered.registrationInfo!.credential,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/RP ID hash/);
   });
 });
