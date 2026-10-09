@@ -7,9 +7,9 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Provider {
-  google
-  github
+enum InviteKind {
+  join
+  recovery
 }
 
 enum ChatType {
@@ -23,45 +23,90 @@ enum ChatRole {
 }
 
 model User {
-  id             String   @id @default(uuid()) @db.Uuid
-  provider       Provider
-  providerUserId String   @map("provider_user_id")
+  id             String    @id @default(uuid()) @db.Uuid
+  webauthnUserId Bytes     @unique @map("webauthn_user_id")
   name           String
-  avatarUrl      String   @map("avatar_url")
-  isAdmin        Boolean  @default(false) @map("is_admin")
-  createdAt      DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  avatarUrl      String    @map("avatar_url")
+  isAdmin        Boolean   @default(false) @map("is_admin")
+  disabledAt     DateTime? @map("disabled_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  allowlistEntries AllowlistEntry[] @relation("AllowlistAddedBy")
-  allowlistEntry   AllowlistEntry?  @relation("AllowlistLinkedUser")
-  sessions         Session[]
-  createdChats     Chat[]
-  memberships      ChatMember[]
-  messages         Message[]
+  sessions        Session[]
+  passkeys        Passkey[]
+  createdChats    Chat[]
+  memberships     ChatMember[]
+  messages        Message[]
+  invitesCreated  Invite[]            @relation("InviteCreatedBy")
+  invitesUsed     Invite[]            @relation("InviteUsedBy")
+  recoveryInvites Invite[]            @relation("InviteTarget")
+  challenges      WebauthnChallenge[]
 
-  @@unique([provider, providerUserId])
   @@map("users")
 }
 
-model AllowlistEntry {
-  id            String   @id @default(uuid()) @db.Uuid
-  provider      Provider
-  providerLogin String   @map("provider_login")
-  addedById     String?  @map("added_by") @db.Uuid
-  userId        String?  @unique @map("user_id") @db.Uuid
-  createdAt     DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+model Passkey {
+  id         String    @id
+  userId     String    @map("user_id") @db.Uuid
+  publicKey  Bytes     @map("public_key")
+  counter    BigInt
+  transports String[]
+  deviceType String    @map("device_type")
+  backedUp   Boolean   @map("backed_up")
+  name       String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
 
-  addedBy User? @relation("AllowlistAddedBy", fields: [addedById], references: [id])
-  user    User? @relation("AllowlistLinkedUser", fields: [userId], references: [id], onDelete: SetNull)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, providerLogin])
-  @@map("allowlist")
+  @@index([userId])
+  @@map("passkeys")
+}
+
+model Invite {
+  id          String     @id @default(uuid()) @db.Uuid
+  tokenHash   String     @unique @map("token_hash")
+  kind        InviteKind
+  userId      String?    @map("user_id") @db.Uuid
+  makeAdmin   Boolean    @default(false) @map("make_admin")
+  createdById String?    @map("created_by") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz(3)
+  usedAt      DateTime?  @map("used_at") @db.Timestamptz(3)
+  usedById    String?    @map("used_by") @db.Uuid
+  revokedAt   DateTime?  @map("revoked_at") @db.Timestamptz(3)
+
+  user       User?               @relation("InviteTarget", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy  User?               @relation("InviteCreatedBy", fields: [createdById], references: [id])
+  usedBy     User?               @relation("InviteUsedBy", fields: [usedById], references: [id])
+  challenges WebauthnChallenge[]
+
+  @@map("invites")
+}
+
+model WebauthnChallenge {
+  id             String   @id @default(uuid()) @db.Uuid
+  challenge      String
+  purpose        String
+  inviteId       String?  @map("invite_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  webauthnUserId Bytes?   @map("webauthn_user_id")
+  name           String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+
+  invite Invite? @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 model Session {
   id        String   @id
   userId    String   @map("user_id") @db.Uuid
   csrfToken String   @map("csrf_token")
-  expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -76,7 +121,7 @@ model Chat {
   directKey   String?  @unique @map("direct_key")
   createdById String   @map("created_by") @db.Uuid
   lastSeq     Int      @default(0) @map("last_seq")
-  createdAt   DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdBy User         @relation(fields: [createdById], references: [id])
   members   ChatMember[]
@@ -90,7 +135,7 @@ model ChatMember {
   userId      String   @map("user_id") @db.Uuid
   role        ChatRole @default(member)
   lastReadSeq Int      @default(0) @map("last_read_seq")
-  joinedAt    DateTime @default(now()) @db.Timestamptz(3) @map("joined_at")
+  joinedAt    DateTime @default(now()) @map("joined_at") @db.Timestamptz(3)
 
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
@@ -107,7 +152,7 @@ model Message {
   senderId  String   @map("sender_id") @db.Uuid
   clientId  String   @map("client_id")
   body      String
-  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
   sender User @relation(fields: [senderId], references: [id])

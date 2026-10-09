@@ -1,10 +1,11 @@
+import { randomBytes } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { SessionsService } from '../../src/sessions/sessions.service.js';
 
 export async function resetDb(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE messages, chat_members, chats, sessions, allowlist, users RESTART IDENTITY CASCADE',
+    'TRUNCATE webauthn_challenges, passkeys, invites, messages, chat_members, chats, sessions, users RESTART IDENTITY CASCADE',
   );
 }
 
@@ -16,20 +17,16 @@ export interface TestLogin {
 
 export async function loginAs(
   app: INestApplication,
-  options: { isAdmin?: boolean; providerUserId?: string; name?: string; allowlisted?: boolean } = {},
+  options: { isAdmin?: boolean; name?: string; disabled?: boolean } = {},
 ): Promise<TestLogin> {
   const prisma = app.get(PrismaService);
-  const providerUserId = options.providerUserId ?? Math.random().toString(36).slice(2);
   const user = await prisma.user.create({
     data: {
-      provider: 'github',
-      providerUserId,
-      name: options.name ?? providerUserId,
+      name: options.name ?? `user-${randomBytes(4).toString('hex')}`,
       avatarUrl: '',
       isAdmin: options.isAdmin ?? false,
-      ...((options.allowlisted ?? true)
-        ? { allowlistEntry: { create: { provider: 'github', providerLogin: `test-${providerUserId}` } } }
-        : {}),
+      webauthnUserId: randomBytes(32),
+      disabledAt: options.disabled ? new Date() : null,
     },
   });
   const { token, csrfToken } = await app.get(SessionsService).create(user.id);

@@ -4,11 +4,6 @@ const valid = {
   DATABASE_URL: 'postgresql://u:p@localhost:5433/db',
   PUBLIC_URL: 'https://chat.example.com',
   ALLOWED_ORIGINS: 'https://a.example.com,https://b.example.com',
-  FIRST_ADMIN: 'github:Octocat',
-  GOOGLE_CLIENT_ID: 'gid',
-  GOOGLE_CLIENT_SECRET: 'gsecret',
-  GITHUB_CLIENT_ID: 'hid',
-  GITHUB_CLIENT_SECRET: 'hsecret',
 };
 
 describe('parseEnv', () => {
@@ -20,8 +15,6 @@ describe('parseEnv', () => {
     const config = parseEnv(valid);
     expect(config.databaseUrl).toBe(valid.DATABASE_URL);
     expect(config.publicUrl).toBe(valid.PUBLIC_URL);
-    expect(config.oauth.github).toEqual({ clientId: 'hid', clientSecret: 'hsecret' });
-    expect(config.oauth.google).toEqual({ clientId: 'gid', clientSecret: 'gsecret' });
   });
 
   it('splits ALLOWED_ORIGINS into an array', () => {
@@ -37,18 +30,39 @@ describe('parseEnv', () => {
     expect(config.sessionCookieName).toBe('sid');
   });
 
-  it('parses FIRST_ADMIN and lowercases the login', () => {
-    expect(parseEnv(valid).firstAdmin).toEqual({ provider: 'github', login: 'octocat' });
+  it('parses without GOOGLE_*/GITHUB_*/FIRST_ADMIN', () => {
+    const config = parseEnv(valid);
+    expect(config).not.toHaveProperty('firstAdmin');
+    expect(config).not.toHaveProperty('oauth');
+  });
+
+  it('defaults RP_NAME to Messenger, INVITE_TTL_HOURS to 72, AUTH_RATE_PER_MINUTE to 20, TRUST_PROXY to 0', () => {
+    const config = parseEnv(valid);
+    expect(config.rpName).toBe('Messenger');
+    expect(config.inviteTtlHours).toBe(72);
+    expect(config.authRatePerMinute).toBe(20);
+    expect(config.trustProxy).toBe(0);
+  });
+
+  it('reads RP_NAME, INVITE_TTL_HOURS, AUTH_RATE_PER_MINUTE and TRUST_PROXY', () => {
+    const config = parseEnv({
+      ...valid,
+      RP_NAME: 'Chat',
+      INVITE_TTL_HOURS: '24',
+      AUTH_RATE_PER_MINUTE: '5',
+      TRUST_PROXY: '1',
+    });
+    expect(config).toMatchObject({ rpName: 'Chat', inviteTtlHours: 24, authRatePerMinute: 5, trustProxy: 1 });
+  });
+
+  it('rejects TRUST_PROXY=-1', () => {
+    expect(() => parseEnv({ ...valid, TRUST_PROXY: '-1' })).toThrow();
   });
 
   it('strips a trailing slash from PUBLIC_URL', () => {
     expect(parseEnv({ ...valid, PUBLIC_URL: 'https://chat.example.com/' }).publicUrl).toBe(
       'https://chat.example.com',
     );
-  });
-
-  it('rejects FIRST_ADMIN with an unknown provider', () => {
-    expect(() => parseEnv({ ...valid, FIRST_ADMIN: 'gitlab:x' })).toThrow();
   });
 
   it('defaults maxGroupMembers to 100', () => {

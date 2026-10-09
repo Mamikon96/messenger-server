@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { Controller, Get, INestApplication, Post, UseGuards } from '@nestjs/common';
 import request from 'supertest';
@@ -43,10 +44,9 @@ describe('Sessions (e2e)', () => {
     await resetDb(prisma);
     const user = await prisma.user.create({
       data: {
-        provider: 'github',
-        providerUserId: '1',
         name: 'u',
         avatarUrl: '',
+        webauthnUserId: randomBytes(32),
       },
     });
     userId = user.id;

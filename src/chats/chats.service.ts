@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { allowedUserWhere } from '../allowlist/allowed-user.js';
 import { AppError } from '../common/app-error.js';
 import { ConfigService } from '../config/config.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { activeUserWhere } from '../users/active-user.js';
 import { ChatAccess } from './chat-access.js';
 import { CHAT_EVENTS, type ChatEventsPublisher } from './chat-events.js';
 import {
@@ -153,7 +153,7 @@ export class ChatsService {
         throw new AppError(400, 'validation_failed', 'a direct chat has fixed members');
       }
       if (role !== 'owner') throw new AppError(403, 'forbidden');
-      await this.requireAllowed([targetId], tx);
+      await this.requireActive([targetId], tx);
       const existing = await tx.chatMember.findUnique({
         where: { chatId_userId: { chatId, userId: targetId } },
         select: { userId: true },
@@ -225,7 +225,7 @@ export class ChatsService {
     userId: string,
     dto: DirectInput,
   ): Promise<{ chat: ChatDto; created: boolean }> {
-    await this.requireAllowed([dto.userId]);
+    await this.requireActive([dto.userId]);
     const directKey = [userId, dto.userId].sort().join(':');
     return this.prisma.$transaction(async (tx) => {
       // Идемпотентно и без гонок: уникальный direct_key решает, кто создал чат.
@@ -262,7 +262,7 @@ export class ChatsService {
     if (dto.memberIds.length + 1 > maxGroupMembers) {
       throw new AppError(400, 'validation_failed', `a group holds at most ${maxGroupMembers} members`);
     }
-    await this.requireAllowed(dto.memberIds);
+    await this.requireActive(dto.memberIds);
     const chat = await this.prisma.$transaction(async (tx) => {
       const { id: chatId } = await tx.chat.create({
         data: { type: 'group', title: dto.title, createdById: userId },
@@ -279,13 +279,13 @@ export class ChatsService {
     return { chat: toChatDto(chat, chat.members), created: true };
   }
 
-  /** Все id — существующие пользователи в allowlist (BE-D17), иначе `404 not_found`. */
-  private async requireAllowed(
+  /** Все id — существующие и не отключённые пользователи (BE-D27), иначе `404 not_found`. */
+  private async requireActive(
     ids: string[],
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<void> {
     const count = await db.user.count({
-      where: { AND: [{ id: { in: ids } }, allowedUserWhere] },
+      where: { AND: [{ id: { in: ids } }, activeUserWhere] },
     });
     if (count !== ids.length) throw new AppError(404, 'not_found');
   }

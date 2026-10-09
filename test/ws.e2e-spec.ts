@@ -349,15 +349,6 @@ describe('WebSocket lifecycle (e2e)', () => {
     tab.close();
   });
 
-  it('does not close the socket when the user leaves the allowlist', async () => {
-    await startApp();
-    const tab = await connectWs(app, { cookie: alice.cookie });
-    await prisma.allowlistEntry.deleteMany();
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    expect(tab.socket.readyState).toBe(1);
-    tab.close();
-  });
-
   it('closes sockets with 1001 on shutdown without hanging', async () => {
     await startApp();
     const tab = await connectWs(app, { cookie: alice.cookie });

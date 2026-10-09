@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { normalizeOrigin } from '../realtime/origin.js';
 
-export type Provider = 'google' | 'github';
-
 export interface AppConfig {
   port: number;
   databaseUrl: string;
@@ -15,17 +13,11 @@ export interface AppConfig {
   messageRatePerMinute: number;
   wsHeartbeatMs: number;
   wsMaxSocketsPerUser: number;
-  firstAdmin: { provider: Provider; login: string };
-  oauth: Record<Provider, { clientId: string; clientSecret: string }>;
+  rpName: string;
+  inviteTtlHours: number;
+  authRatePerMinute: number;
+  trustProxy: number;
 }
-
-const firstAdmin = z
-  .string()
-  .regex(/^(google|github):.+$/)
-  .transform((value) => {
-    const [provider, ...rest] = value.split(':');
-    return { provider: provider as Provider, login: rest.join(':').toLowerCase() };
-  });
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3333),
@@ -56,11 +48,10 @@ const envSchema = z.object({
   MESSAGE_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
   WS_HEARTBEAT_MS: z.coerce.number().int().positive().default(30000),
   WS_MAX_SOCKETS_PER_USER: z.coerce.number().int().min(1).default(10),
-  FIRST_ADMIN: firstAdmin,
-  GOOGLE_CLIENT_ID: z.string().min(1),
-  GOOGLE_CLIENT_SECRET: z.string().min(1),
-  GITHUB_CLIENT_ID: z.string().min(1),
-  GITHUB_CLIENT_SECRET: z.string().min(1),
+  RP_NAME: z.string().min(1).default('Messenger'),
+  INVITE_TTL_HOURS: z.coerce.number().int().positive().default(72),
+  AUTH_RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
 
 export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
@@ -77,10 +68,9 @@ export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
     messageRatePerMinute: env.MESSAGE_RATE_PER_MINUTE,
     wsHeartbeatMs: env.WS_HEARTBEAT_MS,
     wsMaxSocketsPerUser: env.WS_MAX_SOCKETS_PER_USER,
-    firstAdmin: env.FIRST_ADMIN,
-    oauth: {
-      google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
-      github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET },
-    },
+    rpName: env.RP_NAME,
+    inviteTtlHours: env.INVITE_TTL_HOURS,
+    authRatePerMinute: env.AUTH_RATE_PER_MINUTE,
+    trustProxy: env.TRUST_PROXY,
   };
 }

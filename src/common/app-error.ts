@@ -4,13 +4,15 @@ export type ErrorCode =
   | 'validation_failed'
   | 'forbidden'
   | 'already_member'
-  | 'already_exists'
-  | 'login_taken'
   | 'rate_limited'
   | 'csrf_invalid'
-  | 'not_allowed'
   | 'unsupported_type'
   | 'unauthorized'
+  | 'invite_invalid'
+  | 'auth_failed'
+  | 'user_disabled'
+  | 'reauth_required'
+  | 'last_passkey'
   | 'not_found'
   | 'internal_error';
 

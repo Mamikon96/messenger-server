@@ -193,11 +193,10 @@ describe('Chats (e2e)', () => {
     expect(await prisma.chat.count()).toBe(0);
   });
 
-  it('returns 404 for an unknown user, for a user outside the allowlist, and for a direct chat with such a user even when the chat already exists', async () => {
+  it('returns 404 for an unknown user, for a disabled user, and for a direct chat with such a user even when the chat already exists', async () => {
     const me = await loginAs(app);
-    const outsider = await loginAs(app, { allowlisted: false });
+    const outsider = await loginAs(app, { disabled: true });
     const friend = await loginAs(app);
-    const admin = await loginAs(app, { isAdmin: true, allowlisted: false });
 
     const expect404 = async (body: object) => {
       const res = await createChat(me, body).expect(404);
@@ -209,13 +208,9 @@ describe('Chats (e2e)', () => {
     await expect404({ type: 'group', title: 'T', memberIds: [friend.userId, outsider.userId] });
     expect(await prisma.chat.count()).toBe(0);
 
-    // Админ без записи allowlist принимается.
-    await createChat(me, { type: 'direct', userId: admin.userId }).expect(201);
-    await createChat(me, { type: 'group', title: 'T', memberIds: [admin.userId] }).expect(201);
-
-    // Чат уже есть, но собеседника убрали из allowlist — 404.
+    // Чат уже есть, но собеседника отключили — 404.
     await createChat(me, { type: 'direct', userId: friend.userId }).expect(201);
-    await prisma.allowlistEntry.deleteMany({ where: { userId: friend.userId } });
+    await prisma.user.update({ where: { id: friend.userId }, data: { disabledAt: new Date() } });
     await expect404({ type: 'direct', userId: friend.userId });
   });
 
@@ -510,12 +505,12 @@ describe('Chats (e2e)', () => {
       expect(updated?.payload).toEqual({ chatId: chat.id, members: full.members });
     });
 
-    it('rejects add by a member (403 forbidden), by a non-member (404), to a direct chat (400), of an unknown or non-allowlisted user (404), of an existing member (409 already_member)', async () => {
+    it('rejects add by a member (403 forbidden), by a non-member (404), to a direct chat (400), of an unknown or disabled user (404), of an existing member (409 already_member)', async () => {
       const owner = await loginAs(app);
       const member = await loginAs(app);
       const stranger = await loginAs(app);
       const candidate = await loginAs(app);
-      const outsider = await loginAs(app, { allowlisted: false });
+      const outsider = await loginAs(app, { disabled: true });
       const chat = await createGroup(owner, [member]);
       const direct = (await createChat(owner, { type: 'direct', userId: member.userId }).expect(201)).body;
       recorder.events.length = 0;
@@ -547,16 +542,6 @@ describe('Chats (e2e)', () => {
       expect(await memberIdsOf(chat.id)).toEqual([owner.userId, member.userId].sort());
       expect(await prisma.chatMember.count({ where: { chatId: direct.id } })).toBe(2);
       expect(recorder.events).toHaveLength(0);
-    });
-
-    it('adds an admin without an allowlist entry', async () => {
-      const owner = await loginAs(app);
-      const a = await loginAs(app);
-      const admin = await loginAs(app, { allowlisted: false, isAdmin: true });
-      const chat = await createGroup(owner, [a]);
-
-      await addMember(owner, chat.id, { userId: admin.userId }).expect(204);
-      expect(await memberIdsOf(chat.id)).toEqual([owner.userId, a.userId, admin.userId].sort());
     });
 
     it('requires a session and csrf', async () => {
