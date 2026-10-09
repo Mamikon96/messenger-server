@@ -75,8 +75,9 @@ export class SessionsService {
     return new Set(rows.map((row) => row.id));
   }
 
-  async destroy(token: string): Promise<void> {
-    await this.prisma.session.deleteMany({ where: { id: hashToken(token) } });
+  /** `db` — клиент транзакции вызывающего (вход/регистрация уничтожают прежнюю сессию атомарно). */
+  async destroy(token: string, db: Prisma.TransactionClient = this.prisma): Promise<void> {
+    await db.session.deleteMany({ where: { id: hashToken(token) } });
   }
 
   /** Удаляет все сессии пользователя; возвращает их число. */

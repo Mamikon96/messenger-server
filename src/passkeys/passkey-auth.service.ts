@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/server';
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/server';
 import type { SessionBody } from '../auth/auth.service.js';
 import { AppError } from '../common/app-error.js';
 import { InvitesService } from '../invites/invites.service.js';
@@ -9,11 +12,17 @@ import { SessionsService } from '../sessions/sessions.service.js';
 import { CeremonyStore } from '../webauthn/ceremony-store.js';
 import { PasskeyStore } from '../webauthn/passkey-store.js';
 import { WebauthnService } from '../webauthn/webauthn.service.js';
+import type { LoginVerifyDto } from './dto/login.dto.js';
 import type { RegistrationVerifyDto } from './dto/register.dto.js';
 
 export interface RegistrationStarted {
   ceremonyId: string;
   options: PublicKeyCredentialCreationOptionsJSON;
+}
+
+export interface LoginStarted {
+  ceremonyId: string;
+  options: PublicKeyCredentialRequestOptionsJSON;
 }
 
 export interface RegistrationFinished {
@@ -83,6 +92,7 @@ export class PasskeyAuthService {
   async finishRegistration(
     ceremonyId: string | undefined,
     dto: RegistrationVerifyDto,
+    previousSessionToken?: string,
   ): Promise<RegistrationFinished> {
     const ceremony = await this.ceremonies.consume(ceremonyId, 'register');
     if (!ceremony.inviteId) throw new AppError(401, 'auth_failed');
@@ -120,9 +130,73 @@ export class PasskeyAuthService {
 
       await this.invites.claim(tx, inviteId, user.id);
       await this.passkeys.insert(tx, user.id, passkey, dto.passkeyName);
+      if (previousSessionToken) await this.sessions.destroy(previousSessionToken, tx);
       const session = await this.sessions.create(user.id, tx);
       return {
         body: { user, csrfToken: session.csrfToken },
+        sessionToken: session.token,
+        expiresAt: session.expiresAt,
+      };
+    });
+  }
+
+  /** Вход без логина: `allowCredentials` пуст, пользователя определяет passkey. */
+  async startLogin(): Promise<LoginStarted> {
+    const options = await this.webauthn.authenticationOptions();
+    const ceremonyId = await this.ceremonies.create({
+      challenge: options.challenge,
+      purpose: 'login',
+      inviteId: null,
+      userId: null,
+      webauthnUserId: null,
+      name: null,
+    });
+    return { ceremonyId, options };
+  }
+
+  /** Проверяет подпись и userHandle; в одной транзакции под блокировкой строки пользователя создаёт сессию. */
+  async finishLogin(
+    ceremonyId: string | undefined,
+    dto: LoginVerifyDto,
+    previousSessionToken?: string,
+  ): Promise<RegistrationFinished> {
+    const ceremony = await this.ceremonies.consume(ceremonyId, 'login');
+    const { credential } = dto;
+    const stored = await this.prisma.passkey.findUnique({
+      where: { id: credential.id },
+      include: { user: { select: { webauthnUserId: true } } },
+    });
+    if (!stored) throw new AppError(401, 'auth_failed');
+    const userHandle = credential.response.userHandle;
+    if (!userHandle || userHandle !== Buffer.from(stored.user.webauthnUserId).toString('base64url')) {
+      throw new AppError(401, 'auth_failed');
+    }
+    const { newCounter } = await this.webauthn.verifyAuthentication(credential, ceremony.challenge, {
+      id: stored.id,
+      publicKey: new Uint8Array(stored.publicKey),
+      counter: stored.counter,
+      transports: stored.transports,
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      // та же блокировка строки, что у отключения: исключает гонку «отключение ↔ сессия»
+      const locked = await tx.$queryRaw<
+        { id: string; name: string; avatar_url: string; disabled_at: Date | null }[]
+      >`SELECT id::text AS id, name, avatar_url, disabled_at FROM users WHERE id = ${stored.userId}::uuid FOR UPDATE`;
+      const row = locked[0];
+      if (!row) throw new AppError(401, 'auth_failed');
+      if (row.disabled_at) throw new AppError(403, 'user_disabled');
+      await tx.passkey.update({
+        where: { id: stored.id },
+        data: { counter: newCounter, lastUsedAt: new Date() },
+      });
+      if (previousSessionToken) await this.sessions.destroy(previousSessionToken, tx);
+      const session = await this.sessions.create(row.id, tx);
+      return {
+        body: {
+          user: { id: row.id, name: row.name, avatarUrl: row.avatar_url },
+          csrfToken: session.csrfToken,
+        },
         sessionToken: session.token,
         expiresAt: session.expiresAt,
       };
