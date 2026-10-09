@@ -1,19 +1,17 @@
 # Задачи backend
-> Проверено: 2026-10-09 @ 64caf03+dirty
+> Проверено: 2026-10-09 @ 9be205b+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-21 (P1)** Замена OAuth (Google/GitHub) на вход по passkeys (WebAuthn) с одноразовыми инвайт-ссылками. Причина: независимость от внешних провайдеров, не у всех участников есть аккаунты. Исследование: `system-analyst` (инвентаризация) и `solution-architect` (альтернативы) — выполнено; выбор пользователя по всем пунктам сделан 2026-10-09, решения — `decisions.md` (SH-D14, BE-D24–BE-D29).
+- **BE-21 (P1)** Замена OAuth (Google/GitHub) на вход по passkeys (WebAuthn) с одноразовыми инвайт-ссылками. Решения: SH-D14, BE-D24–BE-D30. План: `docs/superpowers/plans/2026-10-09-passkeys-invites.md`, исполнение subagent-driven в ветке `feature/be-21-passkeys` (от `feature/be-17-client-questions`).
+  - Сделано: задачи 1–9 плана (схема и миграция `20261009120000_passkeys_invites`, программный аутентификатор, лимитер по IP/`OriginGuard`/`trust proxy`/отзыв сессий, церемонии WebAuthn, инвайты и админка пользователей, регистрация по инвайту и восстановление, вход без логина, «мои ключи», CLI `npm run admin:invite`) — каждая с ревью `nestjs-reviewer`; задача 10 (спека, `docs/client-integration.md`, `architecture.md`, README, `scripts/check-sync.mjs`) — выполнена, идёт приёмка.
   - Осталось:
-    - план реализации готов и проверен `system-analyst`: `docs/superpowers/plans/2026-10-09-passkeys-invites.md` (10 задач; уточнения пользователя — BE-D30); ждёт ревью плана пользователем и выбора способа исполнения;
-    - удаление `arctic`, OAuth-кода и `FIRST_ADMIN`/`GOOGLE_*`/`GITHUB_*`; незакоммиченные правки `profile-mappers.ts` станут лишними;
-    - обновление спеки, `docs/client-integration.md`, `scripts/check-sync.mjs` (`REDIRECT_ONLY`, разбор `fail(...)`), `architecture.md`;
-    - задача для клиента `messenger-client-react`: экран входа по passkey, страница `/invite#token`, «Мои ключи», админка инвайтов, удаление обработки `auth_error`;
-    - приёмка (`bash scripts/accept.sh`) и ревью `nestjs-reviewer`.
-  - Зависит от: SH-D14, BE-D24–BE-D29. Делает неактуальными OAuth-хвосты BE-11 и `docs/backend-google-oauth-invalid-client.md`.
-
+    - `bash scripts/accept.sh` = 0 и коммит задачи 10;
+    - финальное ревью всей ветки и исправление его замечаний (накопленные minor — в журнале исполнения);
+    - слияние в `develop` — по решению пользователя (git-flow).
+  - Зависит от: SH-D14, BE-D24–BE-D30.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
@@ -24,12 +22,13 @@
 - `pg` — runtime-зависимость адаптера Prisma — объявлена в `devDependencies` (BE-D18); перенести в `dependencies`, если понадобится прямой импорт в prod-коде.
 
 ## Бэклог
+- **BE-22 (P1, клиент `messenger-client-react`)** Перейти на вход по passkey (BE-21, `docs/client-integration.md` §2): экран входа (`/api/auth/passkey/login/*`), страница `/invite#token` (проверка инвайта, ввод имени и имени ключа, регистрация), раздел «Мои ключи» (`/api/me/passkeys`, повторный вход при `403 reauth_required`), админка инвайтов и пользователей (`/api/admin/invites`, `/api/admin/users`); выход из системы только при `401 unauthorized` (`401 auth_failed` — неудачная церемония); удалить обработку `auth_error` и кнопки Google/GitHub. Зависит от: BE-21.
 - **BE-20 (P2)** Статус «прочитано собеседником»: `lastReadSeq` в составе участников (`ChatMemberDto`) и/или WS-событие о чтении (в т. ч. для других вкладок читающего — расхождение `unreadCount`). Нужно решение пользователя по форме (событие `chat.read`, кому рассылать). Зависит от: BE-D23, решения пользователя.
-- **BE-15 (P1, клиент `messenger-client-react`)** Подключить WebSocket: `/ws` в `setupProxy.js` с `ws: true`; `ALLOWED_ORIGINS=http://localhost:3000`; реакция на `1006` до `open` (→ `GET /api/auth/session`: 401 — экран входа, иначе реконнект с backoff и догонкой `since`), `4401`, `4008`; правила порядка событий (спека §3: `message.new` для неизвестного чата → `GET /chats/:id`, разрыв `seq` → `since`, `message.new` после `chat.removed` игнорировать); сообщения для `auth_error=not_allowed`/`login_taken`.
+- **BE-15 (P1, клиент `messenger-client-react`)** Подключить WebSocket: `/ws` в `setupProxy.js` с `ws: true`; `ALLOWED_ORIGINS=http://localhost:3000`; реакция на `1006` до `open` (→ `GET /api/auth/session`: 401 — экран входа, иначе реконнект с backoff и догонкой `since`), `4401`, `4008`; правила порядка событий (спека §3: `message.new` для неизвестного чата → `GET /chats/:id`, разрыв `seq` → `since`, `message.new` после `chat.removed` игнорировать).
 - **BE-16 (P3, хвосты BE-09, MINOR)** Кадр клиента больше `maxPayload` пишет в лог `Max payload size exceeded` (`WsAdapter.bindErrorHandler`, шум от клиентского ввода); пауза перед закрытием серверов, чтобы клиент гарантированно получал `1001`, не нужна по e2e, но не проверена под нагрузкой; `config/env.schema.ts` импортирует `realtime/origin.ts` (чистая функция, можно вынести в `common/`); `ConnectionRegistry.remove` обходит всех пользователей (O(N) на закрытие) — хранить `userId` в замыкании шлюза; нет теста на ветку 500 в `SessionWsAdapter.verify` и на закрытие клиента между снимком `tick` и `ping`; `MaxListenersExceededWarning` в `chats`/`messages` e2e — проверить, не появилось ли с фазы 4.
 - **BE-14 (P3, хвосты BE-08, MINOR ревью)** Нет unit-тестов `MessagesService` (покрыто e2e); карта `MessageRateLimiter` не чистит простаивающих пользователей; слот лимита тратится при откате транзакции; таймаут интерактивной транзакции Prisma 5 с при очень горячем чате (P2028 → 500); `created_at` по `now()` начала транзакции (`clock_timestamp()`); нет теста гонки `markRead`/`send`.
 - **BE-02 (P2)** Git (`git init`, ветка `main`, `.gitignore`, первый коммит уже сделаны): .ai/rules/git-flow.md и scripts/git-task.sh по образцу frontend-проекта (требует уточнения: ветки, remote, PR-процесс); после этого вернуть в `scripts/check-memory.sh` проверку sha в штампе. Зависит от: решения пользователя.
-- **BE-11 (P3, техдолг, MINOR ревью фазы 1)** (+ ревью BE-13: в `signIn` админ, удаливший запись allowlist посреди входа, → P2025/500 вместо `not_allowed` (`delete`/`update` → `deleteMany`/`updateMany` с проверкой `count`); параллельный `allowlist.add` того же логина при смене логина → P2002/500 вместо `login_taken`; merge двух разных аккаунтов в свободную запись даёт `403 not_allowed` вместо `409 login_taken`; `canBootstrapAdmin` не сериализован между разными аккаунтами; нет детерминированного теста ложного `not_allowed`) В `scripts/accept.sh` ставить `trap` до `docker compose up`; сбой `sessions.destroy(previous)` в `AuthController.callback` не должен ломать вход (логировать `warn`); чистить просроченные сессии пользователя в `SessionsService.create`; в README указать, как поднять `postgres-test` перед `npm run test:e2e`, и убрать остатки шаблона Nest; (BE-D15, гонка) P2002 в `AuthService.signIn` при параллельном `allowlist.add` того же логина → `login_taken`/лог; (WS-фильтр ошибок не нужен: входящих `@SubscribeMessage` нет, BE-D21); неподтверждённый email Google → `provider_error` вместо `not_allowed`; процедура восстановления админа (SQL) в README; пустой `name`/`given_name` Google → запасное имя (`||` вместо `??`); `z.url()` вместо `z.string().url()`; `resolve()` возвращает суженный `Provider`.
+- **BE-11 (P3, техдолг, MINOR ревью фазы 1)** OAuth-хвосты сняты с удалением OAuth (BE-21). Осталось: в `scripts/accept.sh` ставить `trap` до `docker compose up`; чистить просроченные сессии пользователя в `SessionsService.create`; в README указать, как поднять `postgres-test` перед `npm run test:e2e`; `z.url()` вместо `z.string().url()`. (WS-фильтр ошибок не нужен: входящих `@SubscribeMessage` нет, BE-D21.)
 - **BE-05 (P3)** Агент `task-planner` пишет в .ai/memory/frontend/tasks.md (во frontend-проекте); перенастроить для backend (`~/.claude/agents/task-planner.md`, вне репозитория — по согласованию с пользователем).
 - **BE-06 (P3, техдолг)** Добавить `isAdmin` в тело `GET /api/auth/session`, чтобы клиент мог показывать админ-UI: расширение auth-контракта клиента и правка клиента (SH-D12). Зависит от: BE-03 (фаза 1), согласования с клиентом.
 

@@ -1,6 +1,6 @@
 # Интеграция клиента с messenger-server
 
-> Источник истины — код `messenger-server` (реализованы фазы 1–4). Соответствие документа коду проверяет `scripts/check-sync.mjs`. Тексты `error.message` в контракт не входят: опираться только на `error.code` и HTTP-статус.
+> Источник истины — код `messenger-server` (реализованы фазы 1–4; доступ по инвайтам и вход по passkeys — SH-D14, BE-D24…BE-D30). Соответствие документа коду проверяет `scripts/check-sync.mjs`. Тексты `error.message` в контракт не входят: опираться только на `error.code` и HTTP-статус.
 
 ## 1. Обзор
 
@@ -14,7 +14,7 @@
 ### 1.2. CORS, cookie, credentials
 - CORS **не включён**: только same-origin.
 - `fetch(..., { credentials: 'same-origin' })` достаточно.
-- Сессия — `HttpOnly` cookie, клиент её не видит.
+- Сессия — `HttpOnly` cookie, клиент её не видит. Публичные `POST` (вход, регистрация, проверка инвайта) дополнительно требуют заголовок `Origin` из `ALLOWED_ORIGINS`: браузер ставит его сам при `fetch` с того же origin; иначе `403 forbidden`.
 
 ### 1.3. Формат ошибок REST
 ```json
@@ -25,13 +25,17 @@
 | `error.code` | HTTP | Когда |
 |---|---|---|
 | `validation_failed` | 400, 413 | невалидное тело, query или uuid в пути, битый JSON, нарушение бизнес-правила формы (direct-чат, лимит участников, `seq` больше последнего и т. п.); тело запроса больше ~100 КБ — статус 413 (BE-D22) |
-| `unauthorized` | 401 | нет сессии или она истекла |
+| `unauthorized` | 401 | нет сессии или она истекла — **единственный** `401`, после которого клиент выходит из системы (§2.6) |
+| `auth_failed` | 401 | неудачная WebAuthn-церемония: ответ аутентификатора не прошёл проверку, церемония просрочена, использована повторно или cookie `wa_ceremony` нет; неизвестный ключ; ключ уже зарегистрирован. Сессия при этом **жива** (в том числе в `/api/me/passkeys`) |
 | `csrf_invalid` | 403 | изменяющий запрос без верного `X-CSRF-Token` |
-| `forbidden` | 403 | не хватает прав (не owner, не админ; owner пытается выйти) |
-| `not_found` | 404 | ресурса нет **или** вызывающий не участник чата (403 намеренно не отдаётся); неизвестный путь/метод; неизвестный провайдер OAuth |
+| `forbidden` | 403 | не хватает прав (не owner, не админ; owner пытается выйти); админ меняет сам себя через `PATCH /api/admin/users/:id`; публичный `POST` без допустимого `Origin` |
+| `user_disabled` | 403 | пользователь отключён админом: вход и ссылка восстановления отвергаются |
+| `reauth_required` | 403 | добавить passkey можно только в сессии не старше 10 минут: нужно войти заново (§2.8) |
+| `not_found` | 404 | ресурса нет **или** вызывающий не участник чата (403 намеренно не отдаётся); неизвестный путь/метод |
+| `invite_invalid` | 404 | инвайт-токена нет, он уже использован, отозван или истёк (причины не различаются) |
 | `already_member` | 409 | добавляемый уже в чате |
-| `already_exists` | 409 | дубль записи allowlist (админ) |
-| `rate_limited` | 429 | лимит отправки сообщений, есть `Retry-After` |
+| `last_passkey` | 409 | попытка удалить единственный passkey пользователя |
+| `rate_limited` | 429 | лимит отправки сообщений или лимит публичных эндпоинтов входа по IP (§7), есть `Retry-After` |
 | `internal_error` | 500 | сбой сервера |
 | `unsupported_type` | — | только в WS-кадре `error` |
 
@@ -39,21 +43,22 @@
 
 ## 2. Аутентификация
 
-### 2.1. Вход через OAuth (Google, GitHub)
-1. Клиент делает **полную навигацию** (не `fetch`) на `GET /api/auth/{google|github}/start`. Сервер ставит cookie `oauth_state` (`HttpOnly; SameSite=Lax; Path=/api/auth; Max-Age=600`) и отвечает `302` на провайдера. Неизвестный провайдер — `404 not_found` (JSON).
-2. Провайдер возвращает браузер на `GET /api/auth/{provider}/callback?code&state` (redirect URI = `${PUBLIC_URL}/api/auth/<provider>/callback`).
-3. Успех: ставится cookie сессии, `302 Location: /`.
-4. Ошибка: `302 Location: /?auth_error=<код>`:
+### 2.1. Вход по passkey
+Вход без логина: пользователя определяет сам ключ (discoverable credential). Все запросы — `fetch` с телом JSON, `credentials: 'same-origin'`; cookie `wa_ceremony` клиент не читает, браузер передаёт её сам.
 
-| `auth_error` | Когда |
-|---|---|
-| `access_denied` | пользователь отказался у провайдера |
-| `provider_error` | иная ошибка провайдера, нет `code`, сбой обмена кода, неожиданный сбой; у Google — неподтверждённый email |
-| `invalid_state` | state не совпал, нет cookie `oauth_state` (просрочена через 10 мин), повторное открытие callback |
-| `not_allowed` | аккаунта нет в allowlist |
-| `login_taken` | известный пользователь сменил логин/email у провайдера на такой, который в allowlist привязан к другому аккаунту |
+1. `POST /api/auth/passkey/login/options` (тело пустое) → `200` `PublicKeyCredentialRequestOptionsJSON`:
+```json
+{ "challenge": "kJ3…", "rpId": "chat.example.org", "timeout": 60000, "userVerification": "required" }
+```
+   `allowCredentials` отсутствует или пуст (вход без логина). Сервер ставит cookie `wa_ceremony` (`HttpOnly; SameSite=Lax; Path=/api; Max-Age=300`; `Secure` — только при https): церемония живёт 5 минут и одноразовая. Набор полей по стандарту WebAuthn, клиент передаёт объект как есть.
+2. Клиент: `navigator.credentials.get({ publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options) })` (или `@simplewebauthn/browser`), затем `credential.toJSON()` (`AuthenticationResponseJSON`).
+3. `POST /api/auth/passkey/login/verify` с телом `{ "credential": <AuthenticationResponseJSON> }`. `response.userHandle` обязателен (аутентификатор присылает его для discoverable credentials; без него — `401 auth_failed`).
+   - `200` — тело как у `GET /api/auth/session` (§2.3); ставится cookie сессии, cookie `wa_ceremony` очищается. Если при входе уже была сессия, старая уничтожается: её сокеты закроются кодом `4401`, REST с ней получит `401 unauthorized`.
+   - `401 auth_failed` — церемония не прошла (подпись, `challenge`, origin, просрочка, повтор, неизвестный ключ, `userHandle` не совпал). Показать «не удалось войти, попробуйте ещё раз» и начать с шага 1: повтор шага 3 с той же церемонией невозможен.
+   - `403 user_disabled` — пользователь отключён админом.
+   - `403 forbidden` — нет допустимого `Origin`; `429` — лимит (§7).
 
-Возврата на исходную страницу нет: после входа всегда `/`. Если при входе уже была сессия, старая уничтожается: её сокеты закроются кодом `4401`, REST с ней получит `401`.
+Две церемонии подряд в одной вкладке затирают друг друга (одна cookie): первая завершится `401 auth_failed`. Запускать одну церемонию за раз.
 
 ### 2.2. Сессия
 - Cookie `sid` (имя настраивается, клиенту знать не нужно). `HttpOnly; SameSite=Lax; Path=/; Expires`. `Secure` — **только если `PUBLIC_URL` на https**.
@@ -64,35 +69,64 @@
 - `200`:
 ```json
 {
-  "user": { "id": "6f1c…", "name": "Alice", "avatarUrl": "https://…", "provider": "github" },
+  "user": { "id": "6f1c…", "name": "Alice", "avatarUrl": "" },
   "csrfToken": "q3Jm0w1n4cXb2bX7hR8ZpX0kq4k5o9Qe"
 }
 ```
-  В `user` ровно четыре поля, `isAdmin` нет (SH-D12). `avatarUrl` может быть `""`.
+  В `user` ровно три поля, `provider` и `isAdmin` нет (SH-D12, SH-D14). `avatarUrl` у новых пользователей `""`. Тот же формат у успешных `POST /api/auth/passkey/login/verify` и `POST /api/auth/passkey/register/verify`.
 - `401 unauthorized` — не авторизован.
 
 ### 2.4. CSRF
 - Токен приходит в `GET /api/auth/session`, постоянен в рамках сессии; после нового входа — новый.
-- `X-CSRF-Token: <csrfToken>` обязателен для всех `POST/PUT/PATCH/DELETE` (чаты, сообщения, logout, админка). Для `GET/HEAD/OPTIONS` не нужен.
+- `X-CSRF-Token: <csrfToken>` обязателен для всех `POST/PUT/PATCH/DELETE` под сессией (чаты, сообщения, logout, `/api/me/passkeys`, админка). Для `GET/HEAD/OPTIONS` не нужен. Публичные `POST` без сессии (вход, регистрация, `POST /api/invites/inspect`) CSRF-токена не имеют: их защищает проверка `Origin`.
 - Порядок проверок: сессия (`401`), затем CSRF (`403 csrf_invalid`).
-- Нюанс: пользователь заново вошёл в другой вкладке → cookie новая, а `csrfToken` в памяти старой вкладки от прежней сессии → `403 csrf_invalid`, хотя сессия жива. Лечится повторным `GET /api/auth/session`.
+- Нюанс: пользователь заново вошёл в другой вкладке → cookie новая, а `csrfToken` в памяти старой вкладки от прежней сессии → `403 csrf_invalid`, хотя сессия жива. Лечится повторным `GET /api/auth/session`. Новый вход через passkey тоже выдаёт новый `csrfToken` (он в теле ответа).
 
 ### 2.5. `POST /api/auth/logout`
 Нужны сессия и CSRF. `204` без тела; cookie очищается; сокеты закроются кодом `4401` в течение ≤ 30 с. `401` — нет сессии, `403 csrf_invalid` — нет/неверный токен.
 
 ### 2.6. Как клиент понимает «не авторизован»
-- REST: любой `401`.
+- REST: выход из системы (экран входа, сброс состояния) — **только** при `401` с кодом `unauthorized`. `401` с кодом `auth_failed` — это неудачная WebAuthn-церемония (вход, регистрация, добавление ключа): сессия жива (при входе её и не было), нужно показать ошибку и дать повторить.
 - WS: закрытие кодом `4401`, либо `1006` до `open` (тогда проверить `GET /api/auth/session`). `403` выходом **не** является.
 
-### 2.7. Allowlist (справочно)
-Войти может только аккаунт из allowlist или админ. Удаление из allowlist уже открытые сессии и сокеты не обрывает. Пользователь вне allowlist скрыт из `GET /api/users`, и с ним нельзя создать чат.
+### 2.7. Инвайты и восстановление
+Новых пользователей создаёт только инвайт от админа (SH-D14). Ссылка имеет вид `PUBLIC_URL/invite#<token>`: токен во фрагменте не уходит на сервер и в логи прокси. SPA на маршруте `/invite` читает `location.hash`, сразу убирает его из адресной строки (`history.replaceState`) и передаёт токен в теле POST. Токен — 43 символа base64url; другой формат даёт `400 validation_failed`. Срок жизни `INVITE_TTL_HOURS` (по умолчанию 72 ч), ссылка одноразовая; админ может её отозвать.
+
+1. `POST /api/invites/inspect` `{ "token": "<token>" }` → `200 { "kind": "join" | "recovery", "expiresAt": "…" }` (необязательная проверка до показа формы); `404 invite_invalid` — ссылка недействительна (использована, отозвана, истекла или неверна).
+2. `POST /api/auth/passkey/register/options` `{ "token": "<token>", "name": "<имя>" }` → `200` `PublicKeyCredentialCreationOptionsJSON` (+ cookie `wa_ceremony`):
+```json
+{ "rp": { "name": "Messenger", "id": "chat.example.org" },
+  "user": { "id": "…", "name": "Alice", "displayName": "Alice" },
+  "challenge": "Zk1…", "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }],
+  "authenticatorSelection": { "residentKey": "required", "userVerification": "required" },
+  "attestation": "none", "excludeCredentials": [] }
+```
+   - `"join"`: `name` обязателен (1..64 после `trim`) — так пользователь будет называться в мессенджере; без него `400 validation_failed`.
+   - `"recovery"`: `name` не нужен и игнорируется; `excludeCredentials` содержит уже имеющиеся ключи пользователя.
+   - `404 invite_invalid`; `403 user_disabled` (восстановление отключённого пользователя; сначала его должен включить другой админ).
+3. Клиент: `navigator.credentials.create({ publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(options) })`, затем `credential.toJSON()` (`RegistrationResponseJSON`).
+4. `POST /api/auth/passkey/register/verify` `{ "credential": <RegistrationResponseJSON>, "passkeyName": "<1..64>" }` — токена в теле нет (инвайт сервер берёт из церемонии). `passkeyName` обязателен и задаётся пользователем («iPhone», «Ноутбук»), иначе `400 validation_failed`.
+   - `201` — тело как у `GET /api/auth/session` (§2.3); ставится cookie сессии. Для `"join"` создан новый пользователь, для `"recovery"` ключ добавлен существующему.
+   - `401 auth_failed` — церемония не прошла (повтор шагов 2–4) либо ключ с таким id уже зарегистрирован.
+   - `404 invite_invalid` — ссылку успели использовать или отозвать между шагами; `403 user_disabled`; `429`.
+
+**Восстановление.** Потерял доступ (нет ни одного ключа или новое устройство без доступа к старым) — просит админа выпустить ссылку `kind: "recovery"` (`POST /api/admin/invites`, §3.11). По ссылке тот же сценарий 2–4: к пользователю добавляется новый ключ, **все его прежние сессии удаляются** (сокеты закроются `4401`), старые ключи остаются. Потерянный ключ можно потом удалить в «Моих ключах» (§2.8).
+
+### 2.8. Мои ключи (`/api/me/passkeys`)
+Нужны сессия и CSRF.
+- `GET /api/me/passkeys` → `200 PasskeyItem[]` (по возрастанию `createdAt`).
+- `POST /api/me/passkeys/options` (пустое тело) → `200` `PublicKeyCredentialCreationOptionsJSON` (+ cookie `wa_ceremony`); `excludeCredentials` — уже имеющиеся ключи.
+- `POST /api/me/passkeys/verify` `{ "credential": <RegistrationResponseJSON>, "passkeyName": "<1..64>" }` → `201 PasskeyItem`; `401 auth_failed` — церемония не прошла (сессия при этом жива, §2.6).
+- **Окно повторного входа.** Добавить ключ можно, только если сессия создана не более 10 минут назад (проверяется и на `options`, и на `verify`); иначе `403 reauth_required`. Клиент в этом случае предлагает выйти и войти заново (§2.1), после чего повторяет добавление.
+- `PATCH /api/me/passkeys/:id` `{ "name": "<1..64>" }` → `200 PasskeyItem`; `404` — ключа нет или он чужой.
+- `DELETE /api/me/passkeys/:id` → `204`; `404`; `409 last_passkey` — единственный ключ удалить нельзя (иначе вход станет невозможен).
 
 ## 3. REST API
 
-Все эндпоинты, кроме OAuth, требуют сессию (`401`). Изменяющие запросы требуют `X-CSRF-Token`. Невалидный uuid в пути — `400 validation_failed`. Лишние поля в теле молча отбрасываются. Модели — в разделе 4.
+Все эндпоинты, кроме публичных `POST` входа и регистрации (`/api/auth/passkey/…`) и `POST /api/invites/inspect`, требуют сессию (`401 unauthorized`). Изменяющие запросы требуют `X-CSRF-Token`. Невалидный uuid в пути — `400 validation_failed`. Лишние поля в теле чатов и сообщений молча отбрасываются; в телах входа, регистрации, инвайтов, `/api/me/passkeys` и `PATCH /api/admin/users/:id` лишнее поле — `400 validation_failed`. Модели — в разделе 4.
 
 ### 3.1. `GET /api/users`
-Пользователи allowlist (включая админов и самого себя), по `name` по возрастанию, без пагинации.
+Активные пользователи, т. е. не отключённые админом (включая админов и самого себя), по `name` по возрастанию, без пагинации.
 `200`: `[{ "id", "name", "avatarUrl" }]`
 
 ### 3.2. `GET /api/chats`
@@ -120,7 +154,7 @@
 - `201` + `ChatDto` — создан (создатель группы — `owner`, остальные `member`; в direct оба `member`).
 - `200` + `ChatDto` — direct с этим собеседником уже есть (идемпотентно, событий нет).
 - `400 validation_failed` — форма, дубли, создатель в `memberIds`, лимит.
-- `404 not_found` — любой пользователь не существует или не в allowlist.
+- `404 not_found` — любой пользователь не существует или отключён.
 
 События: `chat.created` получают все участники **кроме инициатора** (для чата с собой — никто). Другие вкладки инициатора его не получают.
 
@@ -132,7 +166,7 @@
 `200` + `ChatDto`. Все участники, включая инициатора, получают `chat.updated {chatId, title}`.
 
 ### 3.6. `POST /api/chats/:id/members` (CSRF)
-Тело `{ "userId": "<uuid>" }`. Порядок: тело (`400`) → членство (`404`) → direct (`400`) → не owner (`403`) → цель не существует/не в allowlist (`404`) → уже участник (`409 already_member`) → лимит (`400`).
+Тело `{ "userId": "<uuid>" }`. Порядок: тело (`400`) → членство (`404`) → direct (`400`) → не owner (`403`) → цель не существует или отключена (`404`) → уже участник (`409 already_member`) → лимит (`400`).
 `204` без тела. Новый участник получает `chat.created`; прежние (включая инициатора) — `chat.updated {chatId, members}`.
 У нового участника `last_read_seq = lastSeq`, но **вся история чата ему доступна** (фильтра по дате вступления нет).
 
@@ -174,11 +208,13 @@ Query (необязательны; только десятичные целые 
 `204`: `last_read_seq = max(текущий, seq)`. `400` — `seq` больше `lastSeq` чата; `404` — нет членства.
 **Событий нет**: другие вкладки, устройства и участники о прочтении не узнают.
 
-### 3.11. Админка `/api/admin/allowlist` (справочно)
-Клиент не знает, админ ли пользователь (SH-D12); админ-UI вне объёма. Нужны сессия, CSRF и права админа (`403`).
-- `GET /api/admin/allowlist` → `200 [{ id, provider, login, createdAt }]`.
-- `POST /api/admin/allowlist` с телом `{provider:"github", login}` или `{provider:"google", login:<email ≤254>}` → `201` + элемент (`login` в нижнем регистре); `400`, `409 already_exists`.
-- `DELETE /api/admin/allowlist/:id` → `204`; `404`.
+### 3.11. Админка: инвайты и пользователи (справочно)
+Клиент не знает, админ ли пользователь (SH-D12), поэтому админ-UI показывается по ответу: `403 forbidden` — не админ. Нужны сессия, CSRF и права админа.
+- `POST /api/admin/invites` — пустое тело или `{ "kind": "join" }` создаёт приглашение; `{ "kind": "recovery", "userId": "<uuid>" }` — ссылку восстановления (`404`, если пользователя нет). `201 IssuedInvite`; поле `url` (`PUBLIC_URL/invite#<token>`) возвращается **только здесь**, позже получить ссылку нельзя. Админ при создании ничего больше не задаёт; права админа выдаются отдельно через `PATCH /api/admin/users/:id`. `400` — лишние поля или неверный `kind`.
+- `GET /api/admin/invites` → `200 InviteItem[]`: только действующие (не использованные, не отозванные, не истёкшие), без токена, старые первыми.
+- `DELETE /api/admin/invites/:id` → `204`; `404` — нет, уже использован, отозван или истёк.
+- `GET /api/admin/users` → `200 AdminUserItem[]`: все пользователи, включая отключённых, по `name`.
+- `PATCH /api/admin/users/:id` `{ "isAdmin"?: boolean, "disabled"?: boolean }` (хотя бы одно поле, иначе `400`) → `200 AdminUserItem`. Изменить себя нельзя (`403 forbidden`), нет пользователя — `404`. `disabled: true` удаляет все сессии пользователя (его сокеты закроются `4401` ≤ 30 с), скрывает его из `GET /api/users` и запрещает вход (`403 user_disabled`); `disabled: false` включает обратно.
 
 ## 4. Модели данных
 
@@ -187,14 +223,17 @@ Query (необязательны; только десятичные целые 
 | Модель | Поля |
 |---|---|
 | `UserSummary` | `id`, `name: string`, `avatarUrl: string` (может быть `""`) |
-| `SessionUser` | `id`, `name`, `avatarUrl`, `provider: "google" \| "github"` |
+| `SessionUser` | `id`, `name`, `avatarUrl` (без `provider` и `isAdmin`) |
 | `ChatMemberDto` | `userId`, `name`, `avatarUrl`, `role: "owner" \| "member"`; порядок — по времени вступления, затем `userId` |
 | `ChatDto` | `id`, `type: "direct" \| "group"`, `title: string \| null` (direct — всегда `null`, group — всегда строка), `lastSeq`, `members: ChatMemberDto[]` (в чате с собой один элемент) |
 | `ChatListItemDto` | `id`, `type`, `title`, `lastSeq`, `lastMessage: ChatMessageDto \| null`, `unreadCount`, `peer?: {id, name, avatarUrl}` (только direct) |
 | `ChatMessageDto` (REST и `message.new`) | `chatId`, `seq`, `senderId`, `clientId`, `body`, `createdAt` |
-| `AllowlistItem` | `id`, `provider`, `login`, `createdAt` |
+| `PasskeyItem` | `id` (credential ID), `name`, `deviceType: "singleDevice" \| "multiDevice"`, `backedUp: boolean`, `createdAt`, `lastUsedAt: string \| null` |
+| `InviteItem` | `id`, `kind: "join" \| "recovery"`, `userId: string \| null` (цель восстановления), `createdAt`, `expiresAt` |
+| `IssuedInvite` | поля `InviteItem` + `url: string` (только в ответе на создание) |
+| `AdminUserItem` | `id`, `name`, `avatarUrl`, `isAdmin: boolean`, `disabledAt: string \| null` |
 
-Имени отправителя в сообщении нет — брать из `members` чата или `/users`. Участник, удалённый из allowlist, остаётся в `members`/`peer`, но пропадает из `/users`. `name` обычно непустой, но `""` не исключён (8б.8).
+Имени отправителя в сообщении нет — брать из `members` чата или `/users`. Отключённый участник остаётся в `members`/`peer`, но пропадает из `/users`. `name` обычно непустой, но `""` не исключён (8б.8).
 
 ## 5. WebSocket
 
@@ -225,7 +264,7 @@ Query (необязательны; только десятичные целые 
 
 ### 5.3. Жизненный цикл и коды закрытия
 - Каждые `WS_HEARTBEAT_MS` (30 с) сервер шлёт протокольный ping (браузер отвечает сам); без pong к следующему тику соединение обрывается (клиент видит `1006`), т. е. 30–60 с.
-- На том же тике проверяется сессия: если закончилась (logout, повторный вход, истечение) — закрытие `4401` с задержкой до 30 с. Удаление из allowlist сокет не закрывает.
+- На том же тике проверяется сессия: если закончилась (logout, повторный вход, истечение, отключение пользователя, восстановление доступа) — закрытие `4401` с задержкой до 30 с.
 - Буфер исходящих > 1 МиБ — обрыв (`1006`).
 
 | Код | Значение | Реакция клиента |
@@ -251,9 +290,18 @@ Query (необязательны; только десятичные целые 
 ## 6. Сквозные сценарии
 
 **Старт и вход.**
-1. `GET /api/auth/session`: `200` — сохранить `user` и `csrfToken` (в памяти); `401` — экран входа.
-2. Если в URL `?auth_error=` — показать сообщение и убрать параметр (`history.replaceState`).
-3. Вход: `location.assign('/api/auth/github/start')` → провайдер → `302 /` → снова `GET /api/auth/session`.
+1. `GET /api/auth/session`: `200` — сохранить `user` и `csrfToken` (в памяти); `401 unauthorized` — экран входа.
+2. Вход: `POST /api/auth/passkey/login/options` → `navigator.credentials.get` → `POST /api/auth/passkey/login/verify` (§2.1) → `200`, сохранить `user` и `csrfToken` из ответа (повторный `GET /api/auth/session` не нужен).
+3. `401 auth_failed` при входе — показать ошибку, остаться на экране входа; не считать это потерей сессии (§2.6).
+
+**Вступление по ссылке.**
+1. Маршрут `/invite`: прочитать токен из `location.hash`, убрать его из адреса.
+2. `POST /api/invites/inspect` → `kind`; `404 invite_invalid` — «ссылка недействительна или истекла».
+3. Для `"join"` спросить имя, для `"recovery"` — только подтвердить действие; затем `register/options` → `navigator.credentials.create` → спросить название ключа → `register/verify` (§2.7) → `201`, сохранить `user` и `csrfToken`, перейти в приложение.
+
+**Мои ключи.** `GET /api/me/passkeys`; добавление — `POST …/options` → `create` → `POST …/verify`; `403 reauth_required` — предложить войти заново; `409 last_passkey` — «нельзя удалить единственный ключ».
+
+**Админка.** Выпуск ссылок: `POST /api/admin/invites`, показать `url` один раз; список действующих — `GET /api/admin/invites`; отключение/права — `PATCH /api/admin/users/:id`; восстановление — `POST /api/admin/invites {kind: "recovery", userId}`.
 
 **Список чатов.** `GET /api/chats`; для экрана «новый чат» — `GET /api/users`; создание — `POST /api/chats` (`201` или `200` + `ChatDto`).
 
@@ -297,7 +345,11 @@ Query (необязательны; только десятичные целые 
 | Heartbeat | 30 с (`WS_HEARTBEAT_MS`) |
 | Тело HTTP | ~100 КБ (умолчание body-parser); сверх — `413 validation_failed` |
 | Сессия | 7 дней абсолютно (`SESSION_TTL_DAYS`) |
-| Rate limit на прочие эндпоинты | нет |
+| Публичные эндпоинты входа и инвайтов | 20 запросов / 60 с на IP (`AUTH_RATE_PER_MINUTE`), один общий бакет, `429 rate_limited` + `Retry-After`; счётчик в памяти процесса. За reverse proxy сервер должен знать число прокси (`TRUST_PROXY`, по умолчанию 0; в проде 1), иначе все клиенты делят один бакет |
+| Церемония WebAuthn | 5 минут (`CEREMONY_TTL_MS`), одноразовая; cookie `wa_ceremony` |
+| Инвайт | 72 ч (`INVITE_TTL_HOURS`), одноразовый, токен 43 символа |
+| Окно для добавления passkey | сессия не старше 10 минут (`REAUTH_WINDOW_MS`), иначе `403 reauth_required` |
+| Имя пользователя / имя passkey | 1..64 после `trim` |
 
 ## 8. Нерешённые вопросы
 
@@ -309,8 +361,9 @@ Query (необязательны; только десятичные целые 
 5. Кэш истории и `lastKnownSeq` по чатам (память или IndexedDB); объём догонки при реконнекте (все чаты или только открытые/кэшированные).
 6. Синхронизация непрочитанных между вкладками (событий о чтении нет): `BroadcastChannel` или перечитывание `GET /api/chats` при фокусе.
 7. Как вкладка инициатора узнаёт о чате, созданном в другой её вкладке (`chat.created` инициатору не приходит): перечитывание списка при фокусе или `message.new` для неизвестного чата.
-8. Тексты для `auth_error` и `error.code`; санитизация и линкификация `body`.
-9. Dev-окружение: прокси `/ws` (`ws: true`) и `/api` на реальный бэкенд вместо mock-BFF.
+8. Тексты для `error.code` (в том числе `auth_failed`, `invite_invalid`, `user_disabled`, `reauth_required`, `last_passkey`); санитизация и линкификация `body`.
+9. Dev-окружение: прокси `/ws` (`ws: true`) и `/api` на реальный бэкенд вместо mock-BFF. WebAuthn в dev работает на `localhost` (secure context), `PUBLIC_URL` и `ALLOWED_ORIGINS` должны совпадать с origin, который открыт в браузере (rpId — hostname `PUBLIC_URL`).
+10. UX passkey: что показывать, если WebAuthn недоступен (`window.PublicKeyCredential` нет) или пользователь отменил диалог (`NotAllowedError`); как предлагать повторный вход при `403 reauth_required`; конвертация JSON ↔ `ArrayBuffer` (нативные `parse…FromJSON`/`toJSON()` или `@simplewebauthn/browser`, BE-D24).
 
 ### 8б. Решает/доделывает бэкенд (вопросы к владельцу продукта)
 1. **Статус «прочитано» собеседником показать нельзя**: чужой `last_read_seq` нигде не отдаётся, событий о чтении нет. Решение о `lastReadSeq` в `ChatMemberDto` и событии о чтении ещё не принято (задача BE-20).
@@ -319,7 +372,7 @@ Query (необязательны; только десятичные целые 
 4. Новый участник группы видит всю историю до вступления — решено, так и остаётся (BE-D23).
 5. Решено (BE-D23): `seq` без пропусков с 1, `hasMore` в ответе истории (§3.9).
 6. Не реализовано (фазы 5–8): presence, «печатает», `delivered`, правка/удаление/ответы, поиск, медиа, Web Push, пагинация `GET /api/chats`, передача роли owner, `isAdmin` в сессии (BE-06), health-эндпоинт. Форма будущих событий не определена.
-7. Rate limit на вход и прочие изменяющие эндпоинты не планируется (BE-D23); нет `helmet`/CSP на стороне API.
+7. Решено (BE-D28): rate limit есть на публичные эндпоинты входа и инвайтов (§7); на остальные изменяющие эндпоинты не планируется. Нет `helmet`/CSP на стороне API.
 8. Решено (BE-D23): `name` не бывает пустым — пустое или пробельное имя заменяется запасным значением.
 9. Dev-конфиг: бэкенд слушает `PORT=3333` (`.env.example`), dev-сервер CRA — 3000; прокси клиента → `http://localhost:3333`; значения `PUBLIC_URL`/`ALLOWED_ORIGINS`.
-10. Реальные Google/GitHub OAuth не проверялись (нет client id/secret).
+10. Снято (SH-D14): OAuth удалён; вход по passkey проверен e2e с программным аутентификатором, на реальных устройствах и браузерах — нет.
