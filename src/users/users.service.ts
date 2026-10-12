@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { allowedUserWhere } from '../allowlist/allowed-user.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { activeUserWhere } from './active-user.js';
 
 export interface UserSummary {
   id: string;
@@ -14,7 +14,7 @@ export class UsersService {
 
   list(): Promise<UserSummary[]> {
     return this.prisma.user.findMany({
-      where: allowedUserWhere,
+      where: activeUserWhere,
       select: { id: true, name: true, avatarUrl: true },
       orderBy: { name: 'asc' },
     });

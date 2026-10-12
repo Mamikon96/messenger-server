@@ -15,11 +15,8 @@ export default defineConfig({
         'postgresql://postgres:postgres@localhost:5433/messenger_test',
       PUBLIC_URL: 'http://localhost:3000',
       ALLOWED_ORIGINS: 'http://localhost:3000',
-      FIRST_ADMIN: 'github:root-admin',
-      GOOGLE_CLIENT_ID: 'test',
-      GOOGLE_CLIENT_SECRET: 'test',
-      GITHUB_CLIENT_ID: 'test',
-      GITHUB_CLIENT_SECRET: 'test',
+      // у supertest один IP: лимит входа проверяется отдельно, с подменой env
+      AUTH_RATE_PER_MINUTE: '10000',
     },
   },
 });

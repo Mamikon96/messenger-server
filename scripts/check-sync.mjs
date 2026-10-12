@@ -12,8 +12,6 @@ const ARCH = '.ai/memory/architecture.md';
 const DECISIONS = '.ai/memory/decisions.md';
 const TASKS = '.ai/memory/tasks.md';
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
-/** Коды, существующие только как значения `auth_error` в редиректе входа (в JSON-ответах не бывают). */
-const REDIRECT_ONLY = new Set(['not_allowed', 'login_taken']);
 /** Стандартные коды закрытия WebSocket, которых нет в нашем коде (их ставит библиотека `ws`/браузер). */
 const PROTOCOL_CLOSE_CODES = new Set(['1006', '1009']);
 
@@ -97,11 +95,11 @@ export function runChecks(root) {
     sameSet('маршруты', name, docRoutes(md), codeRoutes);
   }
 
-  // ---------- 2. Коды ошибок и auth_error ----------
+  // ---------- 2. Коды ошибок ----------
   const errText = srcText('src/common/app-error.ts');
   const errorCodes = new Set([...errText.slice(errText.indexOf('ErrorCode')).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
   if (!errorCodes.size) fail('src/common/app-error.ts: не найден тип ErrorCode');
-  const jsonCodes = new Set([...errorCodes].filter((c) => !REDIRECT_ONLY.has(c)));
+  const jsonCodes = errorCodes;
   const clientCodes = new Set();
   const sec13 = client.split(/^### 1\.3\./m)[1]?.split(/^##/m)[0] ?? '';
   for (const m of sec13.matchAll(/^\| `([a-z_]+)` \|/gm)) if (m[1] !== 'error') clientCodes.add(m[1]);
@@ -109,21 +107,6 @@ export function runChecks(root) {
   const specCodesLine = spec.match(/Коды `error\.code`:([^;\n]*);/);
   if (!specCodesLine) fail(`${SPEC}: нет строки «Коды \`error.code\`: … ;»`);
   else sameSet('коды error.code', SPEC, new Set(ticks(specCodesLine[1])), jsonCodes);
-
-  const authCtl = srcText('src/auth/auth.controller.ts');
-  const authErrors = new Set();
-  for (const call of authCtl.matchAll(/\bfail\(([^;]*)\);?/g)) {
-    for (const lit of call[1].matchAll(/'([a-z_]+)'/g)) authErrors.add(lit[1]);
-  }
-  for (const m of authCtl.matchAll(/signInError\.code === '([a-z_]+)'/g)) authErrors.add(m[1]);
-  for (const c of REDIRECT_ONLY) if (!authErrors.has(c)) fail(`src/auth/auth.controller.ts: ${c} должен приводить к редиректу auth_error`);
-  const sec21 = client.split(/^### 2\.1\./m)[1]?.split(/^### /m)[0] ?? '';
-  const clientAuthErrors = new Set([...sec21.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]).filter((c) => c !== 'auth_error'));
-  sameSet('значения auth_error', CLIENT, clientAuthErrors, authErrors);
-  for (const [name, md] of [[SPEC, spec], [ARCH, arch]]) {
-    const mentioned = new Set([...md.matchAll(/auth_error=([a-z_]+)/g)].map((m) => m[1]));
-    sameSet('значения auth_error', name, mentioned, authErrors, { subsetOnly: true });
-  }
 
   // ---------- 3. Переменные окружения ----------
   const envSchema = srcText('src/config/env.schema.ts');
@@ -168,6 +151,8 @@ export function runChecks(root) {
 
   // ---------- 5. Схема БД ----------
   const prisma = need('prisma/schema.prisma');
+  const enumNames = [...prisma.matchAll(/^enum (\w+) \{/gm)].map((m) => m[1]);
+  const scalarType = new RegExp(`^(String|Int|BigInt|Bytes|Boolean|DateTime|${enumNames.join('|')})$`);
   const dbTables = new Map();
   for (const m of prisma.matchAll(/^model \w+ \{([\s\S]*?)^\}/gm)) {
     const body = m[1];
@@ -177,9 +162,7 @@ export function runChecks(root) {
     for (const line of body.split('\n')) {
       const f = line.match(/^\s+(\w+)\s+([A-Z]\w*)(\[\]|\?)?/);
       if (!f || line.includes('@relation') || /^\s+@@/.test(line)) continue;
-      if (f[3] === '[]') continue;
-      const isScalar = /^(String|Int|Boolean|DateTime|Provider|ChatType|ChatRole)$/.test(f[2]);
-      if (!isScalar) continue;
+      if (!scalarType.test(f[2])) continue; // связи (`Model[]`, `Model?`) колонок не имеют; `String[]` — колонка
       cols.add(line.match(/@map\("([^"]+)"\)/)?.[1] ?? f[1]);
     }
     dbTables.set(table, cols);
@@ -286,10 +269,6 @@ export function runChecks(root) {
   const readme = read('.ai/memory/README.md') ?? '';
   const authPath = readme.match(/(\/\S+\/auth-contract\.md)/)?.[1];
   if (authPath && existsSync(authPath)) {
-    const contract = readFileSync(authPath, 'utf8');
-    for (const e of authErrors) {
-      if (!contract.includes(e)) warnings.push(`клиент: ${authPath} не знает auth_error=${e}`);
-    }
     const proxy = join(dirname(dirname(dirname(authPath))), 'src/setupProxy.js');
     if (existsSync(proxy) && !readFileSync(proxy, 'utf8').includes('/ws')) {
       warnings.push(`клиент: ${proxy} не проксирует /ws`);

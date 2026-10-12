@@ -35,19 +35,12 @@ describe('Users (e2e)', () => {
     }
   });
 
-  it('hides a user whose allowlist entry was removed', async () => {
+  it('GET /users hides disabled users', async () => {
     const me = await loginAs(app, { name: 'Me' });
-    const removed = await loginAs(app, { name: 'Removed', allowlisted: false });
+    const disabled = await loginAs(app, { name: 'Disabled', disabled: true });
     const res = await request(app.getHttpServer()).get('/api/users').set('Cookie', me.cookie).expect(200);
     const ids = res.body.map((u: { id: string }) => u.id);
     expect(ids).toContain(me.userId);
-    expect(ids).not.toContain(removed.userId);
-  });
-
-  it('shows an admin without an allowlist entry', async () => {
-    const me = await loginAs(app, { name: 'Me' });
-    const admin = await loginAs(app, { name: 'Boss', isAdmin: true, allowlisted: false });
-    const res = await request(app.getHttpServer()).get('/api/users').set('Cookie', me.cookie).expect(200);
-    expect(res.body.map((u: { id: string }) => u.id)).toContain(admin.userId);
+    expect(ids).not.toContain(disabled.userId);
   });
 });
