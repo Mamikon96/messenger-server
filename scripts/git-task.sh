@@ -4,12 +4,14 @@
 #                                                                   проверить состояние, затем создать/выбрать ветку задачи
 #   bash scripts/git-task.sh start chore <slug>                     ветка для работы вне бэклога (процесс, конфиги, доки)
 #   bash scripts/git-task.sh commit "<сообщение>" -- <файлы...>     закоммитить указанные файлы на ветке задачи
+#                                                                   (+ футер Co-Authored-By: GIT_TASK_CO_AUTHOR, по умолчанию DEFAULT_CO_AUTHOR; пустое значение — без футера)
 # Скрипт ничего не пушит и ничего не сливает.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 die() { echo "  ✗ $1" >&2; exit 1; }
 SLUG_RE='^[a-z0-9]+(-[a-z0-9]+)*$'
+DEFAULT_CO_AUTHOR='Claude Opus 5.5 <noreply@anthropic.com>'
 
 TASKS=.ai/memory/tasks.md
 
@@ -165,6 +167,12 @@ cmd_commit() {
   [ -z "$(git diff --cached --name-only)" ] || die "в индексе уже есть файлы — сначала git restore --staged, чтобы коммит был только из указанных"
 
   bash scripts/check-memory.sh >/dev/null || { bash scripts/check-memory.sh || true; die "память не актуальна — коммит отменён"; }
+
+  # Футер, которого требует окружение Claude Code (.ai/rules/git-flow.md); уже указанный в сообщении не дублируется
+  local co_author=${GIT_TASK_CO_AUTHOR-$DEFAULT_CO_AUTHOR}
+  if [ -n "$co_author" ] && ! printf '%s\n' "$msg" | grep -qi '^Co-Authored-By:'; then
+    msg=$(printf '%s\n\nCo-Authored-By: %s' "$msg" "$co_author")
+  fi
 
   git add -- "$@"
   git diff --cached --quiet && die "нечего коммитить в указанных файлах"
