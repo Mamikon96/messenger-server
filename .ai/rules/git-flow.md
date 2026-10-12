@@ -19,7 +19,7 @@
 
 **2. Коммиты** — по логическим шагам задачи, на ветке задачи:
 - Каждый коммит — завершённый шаг: `bash scripts/check-fast.sh` зелёный, память актуальна (`memory-protocol.md`).
-- `bash scripts/git-task.sh commit "<type(scope): description>" -- <файлы шага, включая .ai/memory/…>`.
+- `bash scripts/git-task.sh commit "<type(scope): description>" -- <файлы шага, включая .ai/memory/…>`; футер `Co-Authored-By` скрипт добавит сам (раздел «Сообщения коммитов»).
 - Сломанное состояние (красные проверки) не коммитить.
 
 **3. Push и PR** — после закрытия задачи по `acceptance.md` (`bash scripts/accept.sh` = 0 и APPROVE, где ревью требуется), без отдельной просьбы:
@@ -46,4 +46,4 @@
 - `release/*`, `hotfix/*` → `main` через PR, затем аннотированный тег `vX.Y.Z` на `main` и слияние обратно в `develop`. Версии — SemVer.
 
 ## Сообщения коммитов
-Conventional Commits на английском: `<type>(<scope>): <description>`, `type` — `feat` `fix` `refactor` `test` `docs` `style` `perf` `build` `ci` `chore` `revert`; `scope` — модуль (`passkeys`, `chats`, `realtime`, `harness`), необязателен. Описание в повелительном наклонении, до ~72 символов, без точки; ID задачи — в скобках в конце: `feat(chats): add member limit (BE-07)`. Тело (необязательно) — зачем. Последней строкой — футер `Co-Authored-By`, если его требует окружение Claude Code.
+Conventional Commits на английском: `<type>(<scope>): <description>`, `type` — `feat` `fix` `refactor` `test` `docs` `style` `perf` `build` `ci` `chore` `revert`; `scope` — модуль (`passkeys`, `chats`, `realtime`, `harness`), необязателен. Описание в повелительном наклонении, до ~72 символов, без точки; ID задачи — в скобках в конце: `feat(chats): add member limit (BE-07)`. Тело (необязательно) — зачем. Последней строкой — футер `Co-Authored-By`, если его требует окружение Claude Code: `scripts/git-task.sh commit` добавляет его сам (по умолчанию `Claude Opus 5.5 <noreply@anthropic.com>`; другое значение — переменная `GIT_TASK_CO_AUTHOR`, пустая — без футера; строка уже есть в сообщении — не дублируется). При смене модели в окружении обновить `DEFAULT_CO_AUTHOR` в скрипте.
