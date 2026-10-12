@@ -1,24 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-12 @ ad4006f+dirty
+> Проверено: 2026-10-12 @ 7efb213+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-24 (P1)** AI-харнес по итогам аудита `docs/harness-audit-2026-10-12.md` (SH-D15, SH-D16); поглощает BE-02 и BE-05.
-  - Цель: агент работает по контракту задачи, с быстрой проверкой и механическими запретами, тратит меньше контекста; git-цикл автоматизирован по git-flow.
-  - Критерии приёмки:
-    1. Проектные агенты `.claude/agents/` (`nestjs-engineer`, `nestjs-reviewer`, `task-planner`, `solution-architect`) без скилла `project-memory`, с путями этого проекта.
-    2. `.ai/rules/workflow.md` описывает контракт задачи; `scripts/check-memory.sh` падает, если в «В работе» больше одной задачи или у неё нет пунктов «Критерии приёмки», «Вне рамок», «Проверка» (покрыто тестом).
-    3. `scripts/check-fast.sh` (lint, типы, unit по изменённым файлам) работает и возвращает 0 на чистом дереве.
-    4. Код отформатирован Prettier отдельным коммитом; `.claude/settings.json` с правами и hooks: SessionStart-сводка, запрет правки `.env`, применённых миграций и строки «Автоприёмка», Prettier после правки, Stop-проверка памяти (hooks покрыты тестами).
-    5. «Сделано» вынесено в `.ai/memory/tasks-archive.md`, `scripts/check-sync.mjs` видит ID задач из архива (тест); маршрутизатор только в `CLAUDE.md`.
-    6. `.ai/rules/review-checklist.md` с повторявшимися замечаниями ревью.
-    7. `.ai/rules/git-flow.md` и `scripts/git-task.sh` по образцу frontend (SH-D16); устаревшие утверждения про git в `CLAUDE.md`, `state.md`, правилах убраны.
-  - Вне рамок: обобщение глобальных агентов и скилла `project-memory` в `~/.claude` (отдельно, затрагивает другие проекты); хвосты BE-07; изменения кода приложения, кроме форматирования.
-  - Затрагивает: `.claude/`, `.ai/`, `scripts/`, `CLAUDE.md`, `docs/harness-audit-2026-10-12.md`; контракт API: нет; схема БД: нет.
-  - Проверка: `bash scripts/check-memory.sh`, `npx vitest run scripts`; финал `bash scripts/accept.sh`. Ревью не требуется (процесс и конфиги, `acceptance.md`).
-  - Осталось: `bash scripts/accept.sh`; перенос BE-24 (с BE-02, BE-05) в архив; push и PR.
+(нет)
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
