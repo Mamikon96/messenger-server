@@ -15,7 +15,11 @@ describe('Messages (e2e)', () => {
 
   beforeAll(async () => {
     const real = new ConfigService();
-    const config = { ...real.get(), messageRatePerMinute: 1000, maxMessageLength: 20 };
+    const config = {
+      ...real.get(),
+      messageRatePerMinute: 1000,
+      maxMessageLength: 20,
+    };
     app = await createTestApp({
       overrides: [
         { token: CHAT_EVENTS, value: recorder },
@@ -44,7 +48,9 @@ describe('Messages (e2e)', () => {
       .send(body);
 
   const history = (as: TestLogin, chatId: string, query = '') =>
-    http().get(`/api/chats/${chatId}/messages${query}`).set('Cookie', as.cookie);
+    http()
+      .get(`/api/chats/${chatId}/messages${query}`)
+      .set('Cookie', as.cookie);
 
   const markRead = (as: TestLogin, chatId: string, body: object) =>
     http()
@@ -71,7 +77,10 @@ describe('Messages (e2e)', () => {
   describe('POST /chats/:id/messages', () => {
     it('requires a session and csrf', async () => {
       const { alice, chatId } = await directChat();
-      await http().post(`/api/chats/${chatId}/messages`).send(msg()).expect(401);
+      await http()
+        .post(`/api/chats/${chatId}/messages`)
+        .send(msg())
+        .expect(401);
       const noCsrf = await http()
         .post(`/api/chats/${chatId}/messages`)
         .set('Cookie', alice.cookie)
@@ -92,7 +101,9 @@ describe('Messages (e2e)', () => {
         body: 'hi there',
         createdAt: expect.any(String),
       });
-      expect(new Date(res.body.createdAt).toISOString()).toBe(res.body.createdAt);
+      expect(new Date(res.body.createdAt).toISOString()).toBe(
+        res.body.createdAt,
+      );
       const second = await send(bob, chatId, msg('yo')).expect(201);
       expect(second.body.seq).toBe(2);
 
@@ -102,8 +113,13 @@ describe('Messages (e2e)', () => {
         recipients: expect.arrayContaining([alice.userId, bob.userId]),
         payload: res.body,
       });
-      expect(recorder.events[0]).toMatchObject({ recipients: expect.toSatisfy((r: string[]) => r.length === 2) });
-      expect((await prisma.chat.findUniqueOrThrow({ where: { id: chatId } })).lastSeq).toBe(2);
+      expect(recorder.events[0]).toMatchObject({
+        recipients: expect.toSatisfy((r: string[]) => r.length === 2),
+      });
+      expect(
+        (await prisma.chat.findUniqueOrThrow({ where: { id: chatId } }))
+          .lastSeq,
+      ).toBe(2);
     });
 
     it('moves only the sender last_read_seq and keeps unreadCount for the recipient', async () => {
@@ -111,7 +127,8 @@ describe('Messages (e2e)', () => {
       await send(alice, chatId, msg()).expect(201);
       await send(alice, chatId, msg()).expect(201);
       const list = async (as: TestLogin) =>
-        (await http().get('/api/chats').set('Cookie', as.cookie).expect(200)).body[0];
+        (await http().get('/api/chats').set('Cookie', as.cookie).expect(200))
+          .body[0];
       expect((await list(alice)).unreadCount).toBe(0);
       const bobItem = await list(bob);
       expect(bobItem.unreadCount).toBe(2);
@@ -153,7 +170,10 @@ describe('Messages (e2e)', () => {
       ['whitespace-only body', { clientId: randomUUID(), body: '  \n\t ' }],
       ['body too long', { clientId: randomUUID(), body: 'x'.repeat(21) }],
       ['body with NUL', { clientId: randomUUID(), body: 'a\u0000b' }],
-      ['body with a lone surrogate', { clientId: randomUUID(), body: 'a\ud800b' }],
+      [
+        'body with a lone surrogate',
+        { clientId: randomUUID(), body: 'a\ud800b' },
+      ],
     ])('rejects %s with 400 validation_failed', async (_name, payload) => {
       const { alice, chatId } = await directChat();
       const res = await send(alice, chatId, payload).expect(400);
@@ -180,7 +200,10 @@ describe('Messages (e2e)', () => {
       const retry = await send(alice, chatId, dto).expect(200);
       expect(retry.body).toEqual(first.body);
       expect(await prisma.message.count()).toBe(1);
-      expect((await prisma.chat.findUniqueOrThrow({ where: { id: chatId } })).lastSeq).toBe(1);
+      expect(
+        (await prisma.chat.findUniqueOrThrow({ where: { id: chatId } }))
+          .lastSeq,
+      ).toBe(1);
       expect(recorder.events).toHaveLength(1);
     });
 
@@ -188,7 +211,10 @@ describe('Messages (e2e)', () => {
       const { alice, chatId } = await directChat();
       const dto = msg('original');
       const first = await send(alice, chatId, dto).expect(201);
-      const retry = await send(alice, chatId, { clientId: dto.clientId, body: 'changed' }).expect(200);
+      const retry = await send(alice, chatId, {
+        clientId: dto.clientId,
+        body: 'changed',
+      }).expect(200);
       expect(retry.body).toEqual(first.body);
     });
 
@@ -210,15 +236,21 @@ describe('Messages (e2e)', () => {
       const { alice, chatId } = await directChat();
       const dto = msg();
       await send(alice, chatId, dto).expect(201);
-      await prisma.chatMember.delete({ where: { chatId_userId: { chatId, userId: alice.userId } } });
+      await prisma.chatMember.delete({
+        where: { chatId_userId: { chatId, userId: alice.userId } },
+      });
       await send(alice, chatId, dto).expect(404);
     });
 
     it('stores one message for 10 parallel sends with the same clientId', async () => {
       const { alice, chatId } = await directChat();
       const dto = msg();
-      const responses = await Promise.all(Array.from({ length: 10 }, () => send(alice, chatId, dto)));
-      expect(responses.map((r) => r.status).sort()).toEqual([200, 200, 200, 200, 200, 200, 200, 200, 200, 201]);
+      const responses = await Promise.all(
+        Array.from({ length: 10 }, () => send(alice, chatId, dto)),
+      );
+      expect(responses.map((r) => r.status).sort()).toEqual([
+        200, 200, 200, 200, 200, 200, 200, 200, 200, 201,
+      ]);
       expect(new Set(responses.map((r) => r.body.seq))).toEqual(new Set([1]));
       expect(await prisma.message.count()).toBe(1);
       expect(recorder.events).toHaveLength(1);
@@ -227,13 +259,18 @@ describe('Messages (e2e)', () => {
     it('assigns gap-free seq 1..20 to 20 parallel sends', async () => {
       const { alice, bob, chatId } = await directChat();
       const responses = await Promise.all(
-        Array.from({ length: 20 }, (_, i) => send(i % 2 ? alice : bob, chatId, msg(`m${i}`))),
+        Array.from({ length: 20 }, (_, i) =>
+          send(i % 2 ? alice : bob, chatId, msg(`m${i}`)),
+        ),
       );
       expect(responses.every((r) => r.status === 201)).toBe(true);
       expect(responses.map((r) => r.body.seq).sort((a, b) => a - b)).toEqual(
         Array.from({ length: 20 }, (_, i) => i + 1),
       );
-      expect((await prisma.chat.findUniqueOrThrow({ where: { id: chatId } })).lastSeq).toBe(20);
+      expect(
+        (await prisma.chat.findUniqueOrThrow({ where: { id: chatId } }))
+          .lastSeq,
+      ).toBe(20);
     });
   });
 
@@ -241,11 +278,16 @@ describe('Messages (e2e)', () => {
     async function seeded(count: number) {
       const ctx = await directChat();
       for (let i = 1; i <= count; i++) {
-        await send(i % 2 ? ctx.alice : ctx.bob, ctx.chatId, msg(`m${i}`)).expect(201);
+        await send(
+          i % 2 ? ctx.alice : ctx.bob,
+          ctx.chatId,
+          msg(`m${i}`),
+        ).expect(201);
       }
       return ctx;
     }
-    const seqs = (res: request.Response) => res.body.messages.map((m: { seq: number }) => m.seq);
+    const seqs = (res: request.Response) =>
+      res.body.messages.map((m: { seq: number }) => m.seq);
 
     it('requires a session; 404 for non-member; 400 for bad uuid', async () => {
       const { chatId } = await seeded(1);
@@ -271,28 +313,48 @@ describe('Messages (e2e)', () => {
 
     it('is empty for a chat without messages', async () => {
       const { alice, chatId } = await directChat();
-      expect((await history(alice, chatId).expect(200)).body).toEqual({ messages: [], hasMore: false });
+      expect((await history(alice, chatId).expect(200)).body).toEqual({
+        messages: [],
+        hasMore: false,
+      });
     });
 
     it('pages back with before (exclusive) and limit, ascending within a page', async () => {
       const { alice, chatId } = await seeded(7);
-      expect(seqs(await history(alice, chatId, '?limit=3').expect(200))).toEqual([5, 6, 7]);
-      expect(seqs(await history(alice, chatId, '?before=5&limit=3').expect(200))).toEqual([2, 3, 4]);
-      expect(seqs(await history(alice, chatId, '?before=2&limit=3').expect(200))).toEqual([1]);
-      expect(seqs(await history(alice, chatId, '?before=1').expect(200))).toEqual([]);
+      expect(
+        seqs(await history(alice, chatId, '?limit=3').expect(200)),
+      ).toEqual([5, 6, 7]);
+      expect(
+        seqs(await history(alice, chatId, '?before=5&limit=3').expect(200)),
+      ).toEqual([2, 3, 4]);
+      expect(
+        seqs(await history(alice, chatId, '?before=2&limit=3').expect(200)),
+      ).toEqual([1]);
+      expect(
+        seqs(await history(alice, chatId, '?before=1').expect(200)),
+      ).toEqual([]);
     });
 
     it('catches up with since (exclusive), ascending, limited', async () => {
       const { alice, chatId } = await seeded(7);
-      expect(seqs(await history(alice, chatId, '?since=4').expect(200))).toEqual([5, 6, 7]);
-      expect(seqs(await history(alice, chatId, '?since=0&limit=2').expect(200))).toEqual([1, 2]);
-      expect(seqs(await history(alice, chatId, '?since=7').expect(200))).toEqual([]);
-      expect(seqs(await history(alice, chatId, '?since=100').expect(200))).toEqual([]);
+      expect(
+        seqs(await history(alice, chatId, '?since=4').expect(200)),
+      ).toEqual([5, 6, 7]);
+      expect(
+        seqs(await history(alice, chatId, '?since=0&limit=2').expect(200)),
+      ).toEqual([1, 2]);
+      expect(
+        seqs(await history(alice, chatId, '?since=7').expect(200)),
+      ).toEqual([]);
+      expect(
+        seqs(await history(alice, chatId, '?since=100').expect(200)),
+      ).toEqual([]);
     });
 
     it('reports hasMore in the direction of the request', async () => {
       const { alice, chatId } = await seeded(7);
-      const more = async (query: string) => (await history(alice, chatId, query).expect(200)).body.hasMore;
+      const more = async (query: string) =>
+        (await history(alice, chatId, query).expect(200)).body.hasMore;
       expect(await more('')).toBe(false);
       expect(await more('?limit=7')).toBe(false);
       expect(await more('?limit=6')).toBe(true);
@@ -307,7 +369,10 @@ describe('Messages (e2e)', () => {
 
     it('does not spend a seq on a send rejected by validation', async () => {
       const { alice, chatId } = await seeded(2);
-      await send(alice, chatId, { clientId: randomUUID(), body: 'a\u0000b' }).expect(400);
+      await send(alice, chatId, {
+        clientId: randomUUID(),
+        body: 'a\u0000b',
+      }).expect(400);
       await send(alice, chatId, msg('m3')).expect(201);
       expect(seqs(await history(alice, chatId).expect(200))).toEqual([1, 2, 3]);
     });
@@ -318,13 +383,20 @@ describe('Messages (e2e)', () => {
         INSERT INTO messages (id, chat_id, seq, sender_id, client_id, body)
         SELECT gen_random_uuid(), ${chatId}::uuid, g, ${alice.userId}::uuid, gen_random_uuid()::text, 'x'
         FROM generate_series(1, 120) g`;
-      await prisma.chat.update({ where: { id: chatId }, data: { lastSeq: 120 } });
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { lastSeq: 120 },
+      });
       const page = await history(alice, chatId).expect(200);
       expect(page.body.messages).toHaveLength(50);
       expect(page.body.messages[0].seq).toBe(71);
-      expect((await history(alice, chatId, '?limit=100').expect(200)).body.messages).toHaveLength(100);
+      expect(
+        (await history(alice, chatId, '?limit=100').expect(200)).body.messages,
+      ).toHaveLength(100);
       await history(alice, chatId, '?limit=101').expect(400);
-      expect((await history(alice, chatId, '?since=0').expect(200)).body.messages).toHaveLength(50);
+      expect(
+        (await history(alice, chatId, '?since=0').expect(200)).body.messages,
+      ).toHaveLength(50);
     });
 
     it.each([
@@ -344,12 +416,18 @@ describe('Messages (e2e)', () => {
 
   describe('POST /chats/:id/read', () => {
     const readSeq = async (chatId: string, userId: string) =>
-      (await prisma.chatMember.findUniqueOrThrow({ where: { chatId_userId: { chatId, userId } } }))
-        .lastReadSeq;
+      (
+        await prisma.chatMember.findUniqueOrThrow({
+          where: { chatId_userId: { chatId, userId } },
+        })
+      ).lastReadSeq;
 
     it('requires session and csrf; 404 for non-member; 400 for bad uuid', async () => {
       const { alice, chatId } = await directChat();
-      await http().post(`/api/chats/${chatId}/read`).send({ seq: 0 }).expect(401);
+      await http()
+        .post(`/api/chats/${chatId}/read`)
+        .send({ seq: 0 })
+        .expect(401);
       await http()
         .post(`/api/chats/${chatId}/read`)
         .set('Cookie', alice.cookie)
@@ -368,7 +446,10 @@ describe('Messages (e2e)', () => {
       await markRead(bob, chatId, { seq: 1 }).expect(204);
       expect(await readSeq(chatId, bob.userId)).toBe(3);
       await markRead(bob, chatId, { seq: 3 }).expect(204);
-      const list = await http().get('/api/chats').set('Cookie', bob.cookie).expect(200);
+      const list = await http()
+        .get('/api/chats')
+        .set('Cookie', bob.cookie)
+        .expect(200);
       expect(list.body[0].unreadCount).toBe(2);
       await markRead(bob, chatId, { seq: 5 }).expect(204);
       expect(await readSeq(chatId, bob.userId)).toBe(5);
@@ -431,7 +512,10 @@ describe('Messages rate limit (e2e)', () => {
     await send(alice, first).expect(200); // повтор слот не занимает
     await send(alice, { clientId: randomUUID(), body: 'b' }).expect(201);
     await send(alice, { clientId: randomUUID(), body: 'c' }).expect(201);
-    const limited = await send(alice, { clientId: randomUUID(), body: 'd' }).expect(429);
+    const limited = await send(alice, {
+      clientId: randomUUID(),
+      body: 'd',
+    }).expect(429);
     expect(limited.body.error.code).toBe('rate_limited');
     expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
     await send(alice, first).expect(200); // повтор проходит и при исчерпанном лимите

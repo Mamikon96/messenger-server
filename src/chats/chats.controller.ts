@@ -14,7 +14,11 @@ import {
 import type { Response } from 'express';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
 import type { ChatDto, ChatListItemDto } from './chat.mapper.js';
 import { ChatsService } from './chats.service.js';
 import { type AddMemberDto, addMemberSchema } from './dto/add-member.dto.js';

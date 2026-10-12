@@ -10,7 +10,11 @@ import { ChatsService } from './chats.service.js';
 @Module({
   imports: [SessionsModule, RealtimeModule],
   controllers: [ChatsController],
-  providers: [ChatsService, ChatAccess, { provide: CHAT_EVENTS, useExisting: WsChatEvents }],
+  providers: [
+    ChatsService,
+    ChatAccess,
+    { provide: CHAT_EVENTS, useExisting: WsChatEvents },
+  ],
   exports: [ChatAccess, CHAT_EVENTS],
 })
 export class ChatsModule {}

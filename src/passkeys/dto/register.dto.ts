@@ -10,7 +10,10 @@ export const registrationOptionsSchema = z
   .strict();
 
 export const registrationVerifySchema = z
-  .object({ credential: registrationCredentialSchema, passkeyName: displayName })
+  .object({
+    credential: registrationCredentialSchema,
+    passkeyName: displayName,
+  })
   .strict();
 
 export type RegistrationOptionsDto = z.infer<typeof registrationOptionsSchema>;

@@ -62,7 +62,10 @@ export class WebauthnService {
         id: c.id,
         transports: c.transports as AuthenticatorTransportFuture[],
       })),
-      authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'required',
+      },
     });
   }
 
@@ -78,8 +81,10 @@ export class WebauthnService {
         expectedRPID: this.rpID,
         requireUserVerification: true,
       });
-      if (!result.verified || !result.registrationInfo) throw new Error('not verified');
-      const { credential, credentialDeviceType, credentialBackedUp } = result.registrationInfo;
+      if (!result.verified || !result.registrationInfo)
+        throw new Error('not verified');
+      const { credential, credentialDeviceType, credentialBackedUp } =
+        result.registrationInfo;
       return {
         id: credential.id,
         publicKey: credential.publicKey,
@@ -94,7 +99,10 @@ export class WebauthnService {
   }
 
   authenticationOptions(): Promise<PublicKeyCredentialRequestOptionsJSON> {
-    return generateAuthenticationOptions({ rpID: this.rpID, userVerification: 'required' });
+    return generateAuthenticationOptions({
+      rpID: this.rpID,
+      userVerification: 'required',
+    });
   }
 
   async verifyAuthentication(

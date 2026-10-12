@@ -9,7 +9,11 @@ export class ZodValidationPipe implements PipeTransform {
   transform(value: unknown): unknown {
     const result = this.schema.safeParse(value);
     if (!result.success) {
-      throw new AppError(400, 'validation_failed', result.error.issues[0]?.message);
+      throw new AppError(
+        400,
+        'validation_failed',
+        result.error.issues[0]?.message,
+      );
     }
     return result.data;
   }

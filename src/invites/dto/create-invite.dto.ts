@@ -4,7 +4,9 @@ import { z } from 'zod';
 export const createInviteSchema = z.preprocess(
   (value) =>
     value === undefined ||
-    (typeof value === 'object' && value !== null && Object.keys(value).length === 0)
+    (typeof value === 'object' &&
+      value !== null &&
+      Object.keys(value).length === 0)
       ? { kind: 'join' }
       : value,
   z.discriminatedUnion('kind', [
@@ -14,5 +16,4 @@ export const createInviteSchema = z.preprocess(
 );
 
 export type CreateInviteDto =
-  | { kind: 'join' }
-  | { kind: 'recovery'; userId: string };
+  { kind: 'join' } | { kind: 'recovery'; userId: string };

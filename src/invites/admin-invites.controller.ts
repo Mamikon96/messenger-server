@@ -12,9 +12,20 @@ import {
 import { AdminGuard } from '../admin/admin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
-import { type CreateInviteDto, createInviteSchema } from './dto/create-invite.dto.js';
-import { type InviteItem, type IssuedInvite, InvitesService } from './invites.service.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
+import {
+  type CreateInviteDto,
+  createInviteSchema,
+} from './dto/create-invite.dto.js';
+import {
+  type InviteItem,
+  type IssuedInvite,
+  InvitesService,
+} from './invites.service.js';
 
 @Controller('admin/invites')
 @UseGuards(SessionGuard, CsrfGuard, AdminGuard)

@@ -17,10 +17,15 @@ export class SlidingWindowLimiter {
   /** Занимает слот или бросает `429 rate_limited` с `Retry-After`. */
   consume(key: string, now = Date.now()): void {
     this.sweep(now);
-    const recent = (this.hits.get(key) ?? []).filter((at) => now - at < this.windowMs);
+    const recent = (this.hits.get(key) ?? []).filter(
+      (at) => now - at < this.windowMs,
+    );
     if (recent.length >= this.limit()) {
       this.hits.set(key, recent);
-      const retryAfter = Math.max(1, Math.ceil((recent[0] + this.windowMs - now) / 1000));
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((recent[0] + this.windowMs - now) / 1000),
+      );
       throw new AppError(429, 'rate_limited', this.message, {
         'Retry-After': String(retryAfter),
       });

@@ -27,7 +27,8 @@ interface CeremonyRow {
   expires_at: Date;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class CeremonyStore {
@@ -35,14 +36,18 @@ export class CeremonyStore {
 
   /** Создаёт церемонию и заодно удаляет просроченные строки. */
   async create(data: Omit<Ceremony, 'id'>): Promise<string> {
-    await this.prisma.webauthnChallenge.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    await this.prisma.webauthnChallenge.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
     const row = await this.prisma.webauthnChallenge.create({
       data: {
         challenge: data.challenge,
         purpose: data.purpose,
         inviteId: data.inviteId,
         userId: data.userId,
-        webauthnUserId: data.webauthnUserId ? Buffer.from(data.webauthnUserId) : null,
+        webauthnUserId: data.webauthnUserId
+          ? Buffer.from(data.webauthnUserId)
+          : null,
         name: data.name,
         expiresAt: new Date(Date.now() + CEREMONY_TTL_MS),
       },
@@ -52,7 +57,10 @@ export class CeremonyStore {
   }
 
   /** Погашает церемонию одним DELETE … RETURNING; повтор, чужой purpose и просрочка дают 401. */
-  async consume(id: string | undefined, purpose: CeremonyPurpose): Promise<Ceremony> {
+  async consume(
+    id: string | undefined,
+    purpose: CeremonyPurpose,
+  ): Promise<Ceremony> {
     if (!id || !UUID_RE.test(id)) throw new AppError(401, 'auth_failed');
     const rows = await this.prisma.$queryRaw<CeremonyRow[]>`
       DELETE FROM webauthn_challenges
@@ -60,7 +68,11 @@ export class CeremonyStore {
       RETURNING id::text AS id, challenge, purpose, invite_id::text AS invite_id,
                 user_id::text AS user_id, webauthn_user_id, name, expires_at`;
     const row = rows[0];
-    if (!row || row.purpose !== purpose || row.expires_at.getTime() <= Date.now()) {
+    if (
+      !row ||
+      row.purpose !== purpose ||
+      row.expires_at.getTime() <= Date.now()
+    ) {
       throw new AppError(401, 'auth_failed');
     }
     return {
@@ -69,7 +81,9 @@ export class CeremonyStore {
       purpose,
       inviteId: row.invite_id,
       userId: row.user_id,
-      webauthnUserId: row.webauthn_user_id ? new Uint8Array(row.webauthn_user_id) : null,
+      webauthnUserId: row.webauthn_user_id
+        ? new Uint8Array(row.webauthn_user_id)
+        : null,
       name: row.name,
     };
   }

@@ -8,11 +8,18 @@ export const CEREMONY_COOKIE = 'wa_ceremony';
 // path /api: cookie читают и /api/auth/*, и /api/me/passkeys
 const CEREMONY_COOKIE_PATH = '/api';
 
-export function setCeremonyCookie(res: Response, publicUrl: string, id: string): void {
+export function setCeremonyCookie(
+  res: Response,
+  publicUrl: string,
+  id: string,
+): void {
   res.cookie(
     CEREMONY_COOKIE,
     id,
-    cookieOptions(publicUrl, { path: CEREMONY_COOKIE_PATH, maxAge: CEREMONY_TTL_MS }),
+    cookieOptions(publicUrl, {
+      path: CEREMONY_COOKIE_PATH,
+      maxAge: CEREMONY_TTL_MS,
+    }),
   );
 }
 
@@ -23,6 +30,9 @@ export function takeCeremonyId(
   publicUrl: string,
 ): string | undefined {
   const id = parseCookies(req.headers.cookie)[CEREMONY_COOKIE];
-  res.clearCookie(CEREMONY_COOKIE, cookieOptions(publicUrl, { path: CEREMONY_COOKIE_PATH }));
+  res.clearCookie(
+    CEREMONY_COOKIE,
+    cookieOptions(publicUrl, { path: CEREMONY_COOKIE_PATH }),
+  );
   return id || undefined;
 }

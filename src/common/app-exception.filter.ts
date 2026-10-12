@@ -1,4 +1,10 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { AppError, type ErrorCode } from './app-error.js';
 
@@ -23,7 +29,9 @@ function codeForStatus(status: number): ErrorCode {
 function clientErrorStatus(exception: unknown): number | undefined {
   if (!(exception instanceof Error)) return undefined;
   const status = (exception as { status?: unknown }).status;
-  return typeof status === 'number' && status >= 400 && status < 500 ? status : undefined;
+  return typeof status === 'number' && status >= 400 && status < 500
+    ? status
+    : undefined;
 }
 
 @Catch()
@@ -54,8 +62,8 @@ export class AppExceptionFilter implements ExceptionFilter {
       exception instanceof Error ? exception.message : String(exception),
       exception instanceof Error ? exception.stack : undefined,
     );
-    response
-      .status(500)
-      .json({ error: { code: 'internal_error', message: 'Internal server error' } });
+    response.status(500).json({
+      error: { code: 'internal_error', message: 'Internal server error' },
+    });
   }
 }

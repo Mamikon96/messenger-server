@@ -52,7 +52,12 @@ describe('parseEnv', () => {
       AUTH_RATE_PER_MINUTE: '5',
       TRUST_PROXY: '1',
     });
-    expect(config).toMatchObject({ rpName: 'Chat', inviteTtlHours: 24, authRatePerMinute: 5, trustProxy: 1 });
+    expect(config).toMatchObject({
+      rpName: 'Chat',
+      inviteTtlHours: 24,
+      authRatePerMinute: 5,
+      trustProxy: 1,
+    });
   });
 
   it('rejects TRUST_PROXY=-1', () => {
@@ -60,9 +65,9 @@ describe('parseEnv', () => {
   });
 
   it('strips a trailing slash from PUBLIC_URL', () => {
-    expect(parseEnv({ ...valid, PUBLIC_URL: 'https://chat.example.com/' }).publicUrl).toBe(
-      'https://chat.example.com',
-    );
+    expect(
+      parseEnv({ ...valid, PUBLIC_URL: 'https://chat.example.com/' }).publicUrl,
+    ).toBe('https://chat.example.com');
   });
 
   it('defaults maxGroupMembers to 100', () => {
@@ -70,7 +75,9 @@ describe('parseEnv', () => {
   });
 
   it('reads MAX_GROUP_MEMBERS', () => {
-    expect(parseEnv({ ...valid, MAX_GROUP_MEMBERS: '25' }).maxGroupMembers).toBe(25);
+    expect(
+      parseEnv({ ...valid, MAX_GROUP_MEMBERS: '25' }).maxGroupMembers,
+    ).toBe(25);
   });
 
   it('rejects MAX_GROUP_MEMBERS=1', () => {
@@ -84,20 +91,27 @@ describe('parseEnv', () => {
   });
 
   it('reads MAX_MESSAGE_LENGTH and MESSAGE_RATE_PER_MINUTE', () => {
-    const config = parseEnv({ ...valid, MAX_MESSAGE_LENGTH: '10', MESSAGE_RATE_PER_MINUTE: '2' });
+    const config = parseEnv({
+      ...valid,
+      MAX_MESSAGE_LENGTH: '10',
+      MESSAGE_RATE_PER_MINUTE: '2',
+    });
     expect(config.maxMessageLength).toBe(10);
     expect(config.messageRatePerMinute).toBe(2);
   });
 
   it('rejects non-positive message limits', () => {
     expect(() => parseEnv({ ...valid, MAX_MESSAGE_LENGTH: '0' })).toThrow();
-    expect(() => parseEnv({ ...valid, MESSAGE_RATE_PER_MINUTE: 'abc' })).toThrow();
+    expect(() =>
+      parseEnv({ ...valid, MESSAGE_RATE_PER_MINUTE: 'abc' }),
+    ).toThrow();
   });
 
   it('normalizes ALLOWED_ORIGINS (case, trailing slash, default port)', () => {
     const config = parseEnv({
       ...valid,
-      ALLOWED_ORIGINS: 'https://X.com/, http://localhost:3000, https://y.com:443',
+      ALLOWED_ORIGINS:
+        'https://X.com/, http://localhost:3000, https://y.com:443',
     });
     expect(config.allowedOrigins).toEqual([
       'https://x.com',
@@ -107,7 +121,9 @@ describe('parseEnv', () => {
   });
 
   it('rejects an invalid ALLOWED_ORIGINS entry', () => {
-    expect(() => parseEnv({ ...valid, ALLOWED_ORIGINS: 'not a url' })).toThrow();
+    expect(() =>
+      parseEnv({ ...valid, ALLOWED_ORIGINS: 'not a url' }),
+    ).toThrow();
   });
 
   it('defaults websocket settings', () => {
@@ -117,13 +133,19 @@ describe('parseEnv', () => {
   });
 
   it('reads WS_HEARTBEAT_MS and WS_MAX_SOCKETS_PER_USER', () => {
-    const config = parseEnv({ ...valid, WS_HEARTBEAT_MS: '100', WS_MAX_SOCKETS_PER_USER: '3' });
+    const config = parseEnv({
+      ...valid,
+      WS_HEARTBEAT_MS: '100',
+      WS_MAX_SOCKETS_PER_USER: '3',
+    });
     expect(config.wsHeartbeatMs).toBe(100);
     expect(config.wsMaxSocketsPerUser).toBe(3);
   });
 
   it('rejects non-positive websocket settings', () => {
-    expect(() => parseEnv({ ...valid, WS_MAX_SOCKETS_PER_USER: '0' })).toThrow();
+    expect(() =>
+      parseEnv({ ...valid, WS_MAX_SOCKETS_PER_USER: '0' }),
+    ).toThrow();
     expect(() => parseEnv({ ...valid, WS_HEARTBEAT_MS: '0' })).toThrow();
   });
 });

@@ -1,5 +1,9 @@
 import type { ConfigService } from '../config/config.service.js';
-import { ConnectionRegistry, MAX_BUFFERED_BYTES, type WsLike } from './connection-registry.js';
+import {
+  ConnectionRegistry,
+  MAX_BUFFERED_BYTES,
+  type WsLike,
+} from './connection-registry.js';
 
 function fakeSocket(overrides: Partial<WsLike> = {}): WsLike & {
   send: ReturnType<typeof vi.fn>;
@@ -18,7 +22,9 @@ function fakeSocket(overrides: Partial<WsLike> = {}): WsLike & {
 }
 
 const registryWithLimit = (limit: number) =>
-  new ConnectionRegistry({ get: () => ({ wsMaxSocketsPerUser: limit }) } as unknown as ConfigService);
+  new ConnectionRegistry({
+    get: () => ({ wsMaxSocketsPerUser: limit }),
+  } as unknown as ConfigService);
 
 const conn = (socket: WsLike, userId: string) => ({
   socket,
@@ -74,7 +80,9 @@ describe('ConnectionRegistry', () => {
     const good = fakeSocket();
     registry.add(conn(bad, 'a'));
     registry.add(conn(good, 'b'));
-    expect(() => registry.sendTo(['a', 'b'], { type: 't', payload: {} })).not.toThrow();
+    expect(() =>
+      registry.sendTo(['a', 'b'], { type: 't', payload: {} }),
+    ).not.toThrow();
     expect(good.send).toHaveBeenCalledTimes(1);
   });
 

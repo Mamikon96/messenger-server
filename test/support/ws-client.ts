@@ -28,7 +28,10 @@ export interface ConnectOptions {
   autoPong?: boolean;
 }
 
-export function connectWs(app: INestApplication, options: ConnectOptions = {}): Promise<WsTestClient> {
+export function connectWs(
+  app: INestApplication,
+  options: ConnectOptions = {},
+): Promise<WsTestClient> {
   const headers: Record<string, string> = {};
   if (options.cookie) headers.Cookie = options.cookie;
   const origin = options.origin === undefined ? TEST_ORIGIN : options.origin;
@@ -46,7 +49,9 @@ export function connectWs(app: INestApplication, options: ConnectOptions = {}): 
     else frames.push(frame);
   });
   const closed = new Promise<{ code: number; reason: string }>((resolve) => {
-    socket.on('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    socket.on('close', (code, reason) =>
+      resolve({ code, reason: reason.toString() }),
+    );
   });
   const maybeNext = (timeoutMs: number) =>
     new Promise<WsFrame | null>((resolve) => {
@@ -79,7 +84,11 @@ export function connectWs(app: INestApplication, options: ConnectOptions = {}): 
   return new Promise((resolve, reject) => {
     socket.once('open', () => resolve(client));
     socket.once('unexpected-response', (_req, res) =>
-      reject(Object.assign(new Error(`handshake rejected: ${res.statusCode}`), { statusCode: res.statusCode })),
+      reject(
+        Object.assign(new Error(`handshake rejected: ${res.statusCode}`), {
+          statusCode: res.statusCode,
+        }),
+      ),
     );
     socket.once('error', (error) => reject(error));
   });

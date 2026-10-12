@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Controller, Get, INestApplication, Post, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  INestApplication,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { CsrfGuard } from '../src/sessions/csrf.guard.js';
@@ -30,7 +36,10 @@ describe('Sessions (e2e)', () => {
   let userId: string;
 
   beforeAll(async () => {
-    app = await createTestApp({ controllers: [ProbeController], imports: [SessionsModule] });
+    app = await createTestApp({
+      controllers: [ProbeController],
+      imports: [SessionsModule],
+    });
     prisma = app.get(PrismaService);
     sessions = app.get(SessionsService);
   });
@@ -55,8 +64,12 @@ describe('Sessions (e2e)', () => {
     it('stores a hash of the token, not the token, with a ~7 day expiry', async () => {
       const { token, expiresAt } = await sessions.create(userId);
       const hash = createHash('sha256').update(token).digest('hex');
-      expect(await prisma.session.findUnique({ where: { id: token } })).toBeNull();
-      expect(await prisma.session.findUnique({ where: { id: hash } })).not.toBeNull();
+      expect(
+        await prisma.session.findUnique({ where: { id: token } }),
+      ).toBeNull();
+      expect(
+        await prisma.session.findUnique({ where: { id: hash } }),
+      ).not.toBeNull();
       const days = (expiresAt.getTime() - Date.now()) / 86_400_000;
       expect(days).toBeGreaterThan(6.99);
       expect(days).toBeLessThan(7.01);
@@ -65,13 +78,17 @@ describe('Sessions (e2e)', () => {
     it('find returns null for unknown and expired tokens', async () => {
       expect(await sessions.find('nope')).toBeNull();
       const { token } = await sessions.create(userId);
-      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+      await prisma.session.updateMany({
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
       expect(await sessions.find(token)).toBeNull();
     });
 
     it('find deletes an expired session row', async () => {
       const { token } = await sessions.create(userId);
-      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+      await prisma.session.updateMany({
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
       await sessions.find(token);
       expect(await prisma.session.count()).toBe(0);
     });
@@ -97,19 +114,29 @@ describe('Sessions (e2e)', () => {
 
   describe('guards', () => {
     it('returns 401 without a cookie', async () => {
-      const res = await request(app.getHttpServer()).get('/api/probe').expect(401);
+      const res = await request(app.getHttpServer())
+        .get('/api/probe')
+        .expect(401);
       expect(res.body.error.code).toBe('unauthorized');
     });
 
     it('returns 401 for an expired session', async () => {
       const { token } = await sessions.create(userId);
-      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
-      await request(app.getHttpServer()).get('/api/probe').set('Cookie', `sid=${token}`).expect(401);
+      await prisma.session.updateMany({
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      await request(app.getHttpServer())
+        .get('/api/probe')
+        .set('Cookie', `sid=${token}`)
+        .expect(401);
     });
 
     it('lets GET pass without a CSRF header', async () => {
       const { token } = await sessions.create(userId);
-      await request(app.getHttpServer()).get('/api/probe').set('Cookie', `sid=${token}`).expect(200);
+      await request(app.getHttpServer())
+        .get('/api/probe')
+        .set('Cookie', `sid=${token}`)
+        .expect(200);
     });
 
     it('rejects POST with a missing or wrong CSRF token with 403 csrf_invalid', async () => {
@@ -136,7 +163,8 @@ describe('Sessions (e2e)', () => {
     });
   });
   describe('authenticate / existingIds', () => {
-    const hash = (token: string) => createHash('sha256').update(token).digest('hex');
+    const hash = (token: string) =>
+      createHash('sha256').update(token).digest('hex');
 
     it('returns null for missing, garbled and unknown cookies', async () => {
       expect(await sessions.authenticate(undefined)).toBeNull();
@@ -164,12 +192,17 @@ describe('Sessions (e2e)', () => {
       const { token } = await sessions.create(userId);
       const result = await sessions.authenticate(`sid=${token}`);
       expect(result?.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
-      expect(result?.createdAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+      expect(result?.createdAt.getTime()).toBeLessThanOrEqual(
+        Date.now() + 1000,
+      );
     });
 
     it('authenticate returns null for a session of a disabled user', async () => {
       const { token } = await sessions.create(userId);
-      await prisma.user.update({ where: { id: userId }, data: { disabledAt: new Date() } });
+      await prisma.user.update({
+        where: { id: userId },
+        data: { disabledAt: new Date() },
+      });
       expect(await sessions.authenticate(`sid=${token}`)).toBeNull();
     });
 
@@ -179,14 +212,19 @@ describe('Sessions (e2e)', () => {
         data: { name: 'o', avatarUrl: '', webauthnUserId: randomBytes(32) },
       });
       const { token: otherToken } = await sessions.create(other.id);
-      await prisma.user.update({ where: { id: userId }, data: { disabledAt: new Date() } });
+      await prisma.user.update({
+        where: { id: userId },
+        data: { disabledAt: new Date() },
+      });
       const ids = await sessions.existingIds([hash(token), hash(otherToken)]);
       expect([...ids]).toEqual([hash(otherToken)]);
     });
 
     it('deletes and rejects an expired session', async () => {
       const { token } = await sessions.create(userId);
-      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+      await prisma.session.updateMany({
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
       expect(await sessions.authenticate(`sid=${token}`)).toBeNull();
       expect(await prisma.session.count()).toBe(0);
     });

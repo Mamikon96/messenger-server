@@ -41,21 +41,36 @@ export class ChatsService {
     @Inject(CHAT_EVENTS) private readonly events: ChatEventsPublisher,
   ) {}
 
-  async create(userId: string, dto: CreateChatDto): Promise<{ chat: ChatDto; created: boolean }> {
+  async create(
+    userId: string,
+    dto: CreateChatDto,
+  ): Promise<{ chat: ChatDto; created: boolean }> {
     const result =
-      dto.type === 'direct' ? await this.createDirect(userId, dto) : await this.createGroup(userId, dto);
+      dto.type === 'direct'
+        ? await this.createDirect(userId, dto)
+        : await this.createGroup(userId, dto);
     // Событие — только после коммита транзакции и только для нового чата.
     if (result.created) {
-      const recipients = result.chat.members.map((m) => m.userId).filter((id) => id !== userId);
+      const recipients = result.chat.members
+        .map((m) => m.userId)
+        .filter((id) => id !== userId);
       if (recipients.length > 0) {
-        this.events.publish({ type: 'chat.created', recipients, payload: result.chat });
+        this.events.publish({
+          type: 'chat.created',
+          recipients,
+          payload: result.chat,
+        });
       }
     }
     return result;
   }
 
   async get(userId: string, chatId: string): Promise<ChatDto> {
-    const { chat } = await this.access.requireMember(this.prisma, chatId, userId);
+    const { chat } = await this.access.requireMember(
+      this.prisma,
+      chatId,
+      userId,
+    );
     const members = await this.prisma.chatMember.findMany({
       where: { chatId },
       select: chatMembersInclude.members.select,
@@ -119,11 +134,24 @@ export class ChatsService {
   }
 
   /** Переименование группы: только owner; direct — `400`. Событие — после коммита. */
-  async rename(userId: string, chatId: string, title: string): Promise<ChatDto> {
+  async rename(
+    userId: string,
+    chatId: string,
+    title: string,
+  ): Promise<ChatDto> {
     const dto = await this.prisma.$transaction(async (tx) => {
-      const { chat, role } = await this.access.requireMember(tx, chatId, userId, { lock: true });
+      const { chat, role } = await this.access.requireMember(
+        tx,
+        chatId,
+        userId,
+        { lock: true },
+      );
       if (chat.type === 'direct') {
-        throw new AppError(400, 'validation_failed', 'a direct chat cannot be renamed');
+        throw new AppError(
+          400,
+          'validation_failed',
+          'a direct chat cannot be renamed',
+        );
       }
       if (role !== 'owner') throw new AppError(403, 'forbidden');
       const updated = await tx.chat.update({
@@ -146,11 +174,24 @@ export class ChatsService {
    * Добавление в группу (только owner). Строка чата блокируется (`FOR UPDATE`) до проверок,
    * поэтому параллельные добавления не превышают лимит и не дублируют участника.
    */
-  async addMember(userId: string, chatId: string, targetId: string): Promise<void> {
+  async addMember(
+    userId: string,
+    chatId: string,
+    targetId: string,
+  ): Promise<void> {
     const dto = await this.prisma.$transaction(async (tx) => {
-      const { chat, role } = await this.access.requireMember(tx, chatId, userId, { lock: true });
+      const { chat, role } = await this.access.requireMember(
+        tx,
+        chatId,
+        userId,
+        { lock: true },
+      );
       if (chat.type === 'direct') {
-        throw new AppError(400, 'validation_failed', 'a direct chat has fixed members');
+        throw new AppError(
+          400,
+          'validation_failed',
+          'a direct chat has fixed members',
+        );
       }
       if (role !== 'owner') throw new AppError(403, 'forbidden');
       await this.requireActive([targetId], tx);
@@ -160,17 +201,29 @@ export class ChatsService {
       });
       if (existing) throw new AppError(409, 'already_member');
       const { maxGroupMembers } = this.config.get();
-      if ((await tx.chatMember.count({ where: { chatId } })) >= maxGroupMembers) {
-        throw new AppError(400, 'validation_failed', `a group holds at most ${maxGroupMembers} members`);
+      if (
+        (await tx.chatMember.count({ where: { chatId } })) >= maxGroupMembers
+      ) {
+        throw new AppError(
+          400,
+          'validation_failed',
+          `a group holds at most ${maxGroupMembers} members`,
+        );
       }
       try {
         // Новый участник не видит историю непрочитанной: отсчёт — от текущего last_seq.
         await tx.chatMember.create({
-          data: { chatId, userId: targetId, role: 'member', lastReadSeq: chat.lastSeq },
+          data: {
+            chatId,
+            userId: targetId,
+            role: 'member',
+            lastReadSeq: chat.lastSeq,
+          },
         });
       } catch (error) {
         // Единственный уникальный ключ chat_members — PK (chat_id, user_id).
-        if ((error as { code?: string }).code === 'P2002') throw new AppError(409, 'already_member');
+        if ((error as { code?: string }).code === 'P2002')
+          throw new AppError(409, 'already_member');
         throw error;
       }
       const updated = await tx.chat.findUniqueOrThrow({
@@ -179,8 +232,14 @@ export class ChatsService {
       });
       return toChatDto(updated, updated.members);
     });
-    this.events.publish({ type: 'chat.created', recipients: [targetId], payload: dto });
-    const previous = dto.members.map((m) => m.userId).filter((id) => id !== targetId);
+    this.events.publish({
+      type: 'chat.created',
+      recipients: [targetId],
+      payload: dto,
+    });
+    const previous = dto.members
+      .map((m) => m.userId)
+      .filter((id) => id !== targetId);
     this.events.publish({
       type: 'chat.updated',
       recipients: previous,
@@ -192,18 +251,37 @@ export class ChatsService {
    * Выход участника (`targetId` = я) или удаление участника owner'ом.
    * Единственный owner выйти не может — `403 forbidden`.
    */
-  async removeMember(userId: string, chatId: string, targetId: string): Promise<void> {
+  async removeMember(
+    userId: string,
+    chatId: string,
+    targetId: string,
+  ): Promise<void> {
     const members = await this.prisma.$transaction(async (tx) => {
-      const { chat, role } = await this.access.requireMember(tx, chatId, userId, { lock: true });
+      const { chat, role } = await this.access.requireMember(
+        tx,
+        chatId,
+        userId,
+        { lock: true },
+      );
       if (chat.type === 'direct') {
-        throw new AppError(400, 'validation_failed', 'a direct chat has fixed members');
+        throw new AppError(
+          400,
+          'validation_failed',
+          'a direct chat has fixed members',
+        );
       }
       const self = targetId === userId;
       if (!self && role !== 'owner') throw new AppError(403, 'forbidden');
       if (self && role === 'owner') {
-        throw new AppError(403, 'forbidden', 'the owner cannot leave the group');
+        throw new AppError(
+          403,
+          'forbidden',
+          'the owner cannot leave the group',
+        );
       }
-      const { count } = await tx.chatMember.deleteMany({ where: { chatId, userId: targetId } });
+      const { count } = await tx.chatMember.deleteMany({
+        where: { chatId, userId: targetId },
+      });
       if (count === 0) throw new AppError(404, 'not_found');
       const rest = await tx.chatMember.findMany({
         where: { chatId },
@@ -211,7 +289,11 @@ export class ChatsService {
       });
       return toChatDto(chat, rest).members;
     });
-    this.events.publish({ type: 'chat.removed', recipients: [targetId], payload: { chatId } });
+    this.events.publish({
+      type: 'chat.removed',
+      recipients: [targetId],
+      payload: { chatId },
+    });
     if (members.length > 0) {
       this.events.publish({
         type: 'chat.updated',
@@ -240,7 +322,11 @@ export class ChatsService {
         // Чат с собой — одна строка участника.
         const memberIds = [...new Set([userId, dto.userId])];
         await tx.chatMember.createMany({
-          data: memberIds.map((id) => ({ chatId, userId: id, role: 'member' as const })),
+          data: memberIds.map((id) => ({
+            chatId,
+            userId: id,
+            role: 'member' as const,
+          })),
         });
       }
       const chat = await tx.chat.findUniqueOrThrow({
@@ -256,11 +342,19 @@ export class ChatsService {
     dto: GroupInput,
   ): Promise<{ chat: ChatDto; created: boolean }> {
     if (dto.memberIds.includes(userId)) {
-      throw new AppError(400, 'validation_failed', 'memberIds must not include the creator');
+      throw new AppError(
+        400,
+        'validation_failed',
+        'memberIds must not include the creator',
+      );
     }
     const { maxGroupMembers } = this.config.get();
     if (dto.memberIds.length + 1 > maxGroupMembers) {
-      throw new AppError(400, 'validation_failed', `a group holds at most ${maxGroupMembers} members`);
+      throw new AppError(
+        400,
+        'validation_failed',
+        `a group holds at most ${maxGroupMembers} members`,
+      );
     }
     await this.requireActive(dto.memberIds);
     const chat = await this.prisma.$transaction(async (tx) => {
@@ -271,10 +365,17 @@ export class ChatsService {
       await tx.chatMember.createMany({
         data: [
           { chatId, userId, role: 'owner' as const },
-          ...dto.memberIds.map((id) => ({ chatId, userId: id, role: 'member' as const })),
+          ...dto.memberIds.map((id) => ({
+            chatId,
+            userId: id,
+            role: 'member' as const,
+          })),
         ],
       });
-      return tx.chat.findUniqueOrThrow({ where: { id: chatId }, include: chatMembersInclude });
+      return tx.chat.findUniqueOrThrow({
+        where: { id: chatId },
+        include: chatMembersInclude,
+      });
     });
     return { chat: toChatDto(chat, chat.members), created: true };
   }

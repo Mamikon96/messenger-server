@@ -17,7 +17,8 @@ export interface AuthenticatedSession extends SessionInfo {
   token: string;
 }
 
-const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
+const hashToken = (token: string): string =>
+  createHash('sha256').update(token).digest('hex');
 
 @Injectable()
 export class SessionsService {
@@ -33,7 +34,9 @@ export class SessionsService {
   ): Promise<{ token: string; csrfToken: string; expiresAt: Date }> {
     const token = randomBytes(32).toString('base64url');
     const csrfToken = randomBytes(24).toString('base64url');
-    const expiresAt = new Date(Date.now() + this.config.get().sessionTtlDays * 86_400_000);
+    const expiresAt = new Date(
+      Date.now() + this.config.get().sessionTtlDays * 86_400_000,
+    );
     await db.session.create({
       data: { id: hashToken(token), userId, csrfToken, expiresAt },
     });
@@ -59,8 +62,11 @@ export class SessionsService {
   }
 
   /** Сессия по заголовку Cookie: общий вход для SessionGuard и WebSocket. */
-  async authenticate(cookieHeader: string | undefined): Promise<AuthenticatedSession | null> {
-    const token = parseCookies(cookieHeader)[this.config.get().sessionCookieName];
+  async authenticate(
+    cookieHeader: string | undefined,
+  ): Promise<AuthenticatedSession | null> {
+    const token =
+      parseCookies(cookieHeader)[this.config.get().sessionCookieName];
     if (!token) return null;
     const session = await this.find(token);
     return session && { ...session, token };
@@ -76,12 +82,18 @@ export class SessionsService {
   }
 
   /** `db` — клиент транзакции вызывающего (вход/регистрация уничтожают прежнюю сессию атомарно). */
-  async destroy(token: string, db: Prisma.TransactionClient = this.prisma): Promise<void> {
+  async destroy(
+    token: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
     await db.session.deleteMany({ where: { id: hashToken(token) } });
   }
 
   /** Удаляет все сессии пользователя; возвращает их число. */
-  async revokeAllForUser(userId: string, db: Prisma.TransactionClient = this.prisma): Promise<number> {
+  async revokeAllForUser(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
     const { count } = await db.session.deleteMany({ where: { userId } });
     return count;
   }

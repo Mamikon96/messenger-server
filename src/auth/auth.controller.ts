@@ -1,9 +1,20 @@
-import { Controller, Get, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { AppError } from '../common/app-error.js';
 import { ConfigService } from '../config/config.service.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
 import { AuthService } from './auth.service.js';
 import { cookieOptions } from './cookie-options.js';
 
@@ -31,6 +42,9 @@ export class AuthController {
   ): Promise<void> {
     await this.auth.signOut(session.token);
     const config = this.config.get();
-    res.clearCookie(config.sessionCookieName, cookieOptions(config.publicUrl, { path: '/' }));
+    res.clearCookie(
+      config.sessionCookieName,
+      cookieOptions(config.publicUrl, { path: '/' }),
+    );
   }
 }

@@ -2,7 +2,10 @@ import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { AuthRateLimitGuard } from '../common/auth-rate-limit.guard.js';
 import { OriginGuard } from '../common/origin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { type InspectInviteDto, inspectInviteSchema } from './dto/inspect-invite.dto.js';
+import {
+  type InspectInviteDto,
+  inspectInviteSchema,
+} from './dto/inspect-invite.dto.js';
 import { InvitesService } from './invites.service.js';
 
 @Controller('invites')

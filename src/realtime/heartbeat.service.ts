@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '../config/config.service.js';
 import { SessionsService } from '../sessions/sessions.service.js';
 import { ConnectionRegistry } from './connection-registry.js';
@@ -21,7 +26,9 @@ export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
       if (this.running) return;
       this.running = true;
       this.tick()
-        .catch((error: Error) => this.logger.error(`heartbeat tick failed: ${error.message}`))
+        .catch((error: Error) =>
+          this.logger.error(`heartbeat tick failed: ${error.message}`),
+        )
         .finally(() => {
           this.running = false;
         });
@@ -37,7 +44,9 @@ export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
 
   async tick(): Promise<void> {
     const connections = this.registry.all();
-    const existing = await this.existingSessions(connections.map((c) => c.sessionId));
+    const existing = await this.existingSessions(
+      connections.map((c) => c.sessionId),
+    );
     const now = Date.now();
     for (const connection of connections) {
       const { socket } = connection;
@@ -56,7 +65,9 @@ export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
           socket.ping();
         }
       } catch (error) {
-        this.logger.warn(`heartbeat failed for a socket: ${(error as Error).message}`);
+        this.logger.warn(
+          `heartbeat failed for a socket: ${(error as Error).message}`,
+        );
         this.registry.remove(socket);
         try {
           socket.terminate();

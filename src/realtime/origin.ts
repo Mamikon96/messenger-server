@@ -9,7 +9,10 @@ export function normalizeOrigin(value: string): string | null {
 }
 
 /** `allowed` — уже нормализованный список из конфигурации. Отсутствующий Origin не допускается. */
-export function isOriginAllowed(origin: string | undefined, allowed: string[]): boolean {
+export function isOriginAllowed(
+  origin: string | undefined,
+  allowed: string[],
+): boolean {
   if (!origin) return false;
   const normalized = normalizeOrigin(origin);
   return normalized !== null && allowed.includes(normalized);

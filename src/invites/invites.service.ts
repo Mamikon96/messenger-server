@@ -32,15 +32,29 @@ export class InvitesService {
     private readonly config: ConfigService,
   ) {}
 
-  createJoin(createdById: string | null, makeAdmin = false): Promise<IssuedInvite> {
+  createJoin(
+    createdById: string | null,
+    makeAdmin = false,
+  ): Promise<IssuedInvite> {
     return this.issue({ kind: 'join', userId: null, makeAdmin, createdById });
   }
 
   /** Восстановление доступа: `makeAdmin` всегда `false` (ограничение БД `NOT (recovery AND make_admin)`). */
-  async createRecovery(userId: string, createdById: string | null): Promise<IssuedInvite> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  async createRecovery(
+    userId: string,
+    createdById: string | null,
+  ): Promise<IssuedInvite> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!user) throw new AppError(404, 'not_found');
-    return this.issue({ kind: 'recovery', userId, makeAdmin: false, createdById });
+    return this.issue({
+      kind: 'recovery',
+      userId,
+      makeAdmin: false,
+      createdById,
+    });
   }
 
   /** Не использованные, не отозванные и не истёкшие; старые первыми. */
@@ -54,7 +68,12 @@ export class InvitesService {
 
   async revoke(id: string): Promise<void> {
     const { count } = await this.prisma.invite.updateMany({
-      where: { id, usedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        id,
+        usedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
       data: { revokedAt: new Date() },
     });
     if (count !== 1) throw new AppError(404, 'not_found');
@@ -74,9 +93,18 @@ export class InvitesService {
   }
 
   /** Погашение в транзакции вызывающего: условный `updateMany` исключает двойное использование. */
-  async claim(tx: Prisma.TransactionClient, inviteId: string, usedById: string): Promise<void> {
+  async claim(
+    tx: Prisma.TransactionClient,
+    inviteId: string,
+    usedById: string,
+  ): Promise<void> {
     const { count } = await tx.invite.updateMany({
-      where: { id: inviteId, usedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        id: inviteId,
+        usedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
       data: { usedAt: new Date(), usedById },
     });
     if (count !== 1) throw new AppError(404, 'invite_invalid');

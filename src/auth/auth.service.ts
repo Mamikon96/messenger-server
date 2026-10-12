@@ -17,7 +17,9 @@ export class AuthService {
   async getSession(token: string): Promise<SessionBody | null> {
     const session = await this.sessions.find(token);
     if (!session) return null;
-    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+    });
     if (!user) return null;
     return {
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl },

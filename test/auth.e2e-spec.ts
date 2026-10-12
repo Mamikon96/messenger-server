@@ -37,7 +37,9 @@ describe('Auth (e2e)', () => {
   });
 
   it('GET /api/auth/google/start -> 404 not_found', async () => {
-    const res = await request(app.getHttpServer()).get('/api/auth/google/start').expect(404);
+    const res = await request(app.getHttpServer())
+      .get('/api/auth/google/start')
+      .expect(404);
     expect(res.body.error.code).toBe('not_found');
   });
 
