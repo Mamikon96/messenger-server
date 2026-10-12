@@ -11,6 +11,7 @@ const CLIENT = 'docs/client-integration.md';
 const ARCH = '.ai/memory/architecture.md';
 const DECISIONS = '.ai/memory/decisions.md';
 const TASKS = '.ai/memory/tasks.md';
+const TASKS_ARCHIVE = '.ai/memory/tasks-archive.md';
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
 /** Стандартные коды закрытия WebSocket, которых нет в нашем коде (их ставит библиотека `ws`/браузер). */
 const PROTOCOL_CLOSE_CODES = new Set(['1006', '1009']);
@@ -58,6 +59,7 @@ export function runChecks(root) {
   const arch = need(ARCH);
   const decisions = need(DECISIONS);
   const tasks = need(TASKS);
+  const archive = need(TASKS_ARCHIVE);
 
   // ---------- 1. Маршруты ----------
   const normRoute = (method, p) => {
@@ -239,7 +241,7 @@ export function runChecks(root) {
 
   // ---------- 8. Решения и задачи: ссылки существуют ----------
   const decisionIds = new Set([...decisions.matchAll(/^## ((?:SH|BE)-D\d+)\b/gm)].map((m) => m[1]));
-  const taskIds = new Set([...tasks.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
+  const taskIds = new Set([...`${tasks}\n${archive}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
   const scanned = [
     ...srcFiles, ...walk('src', (f) => f.endsWith('.spec.ts')), ...walk('test', (f) => f.endsWith('.ts')),
     ...walk('scripts', () => true), ...walk('.ai', (f) => f.endsWith('.md')), ...walk('docs', (f) => f.endsWith('.md')),
@@ -251,7 +253,7 @@ export function runChecks(root) {
     for (const m of text.matchAll(/\b((?:SH|BE)-D\d+)\b/g)) {
       if (!decisionIds.has(m[1])) fail(`${f}: ссылка на несуществующее решение ${m[1]}`);
     }
-    if (f.startsWith('docs/superpowers/plans/')) continue; // исторические планы: ссылки на задачи не обязаны жить в tasks.md
+    if (f.startsWith('docs/superpowers/plans/')) continue; // исторические планы: ссылки на задачи не обязаны жить в tasks.md/архиве
     for (const m of text.matchAll(/\bBE-(\d+)\b/g)) {
       if (!taskIds.has(`BE-${m[1]}`)) fail(`${f}: ссылка на несуществующую задачу BE-${m[1]}`);
     }
@@ -265,7 +267,18 @@ export function runChecks(root) {
     if (Number(m[2]) < 1 || Number(m[2]) > max) fail(`${CLIENT}: ссылка 8${m[1]}.${m[2]} ведёт на несуществующий пункт`);
   }
 
-  // ---------- 9. Внешний репозиторий клиента (только предупреждения) ----------
+  // ---------- 9. Задача в работе: одна и с контрактом (.ai/rules/workflow.md) ----------
+  const section = (md, title) => md.split(new RegExp(`^## ${title}\\s*$`, 'm'))[1]?.split(/^## /m)[0] ?? '';
+  const wip = [...section(tasks, 'В работе').matchAll(/^- \*\*(BE-\d+)[^\n]*\n((?:[ \t]+[^\n]*\n?)*)/gm)];
+  if (wip.length > 1) fail(`${TASKS}: в «В работе» ${wip.length} задач (${wip.map((m) => m[1]).join(', ')}), допустима одна (WIP = 1)`);
+  for (const [, id, body] of wip) {
+    for (const key of ['Цель', 'Критерии приёмки', 'Вне рамок', 'Затрагивает', 'Проверка', 'Осталось']) {
+      if (!new RegExp(`^\\s+- ${key}:`, 'm').test(body)) fail(`${TASKS}: у ${id} в «В работе» нет пункта контракта «${key}:» (.ai/rules/workflow.md)`);
+    }
+  }
+  if (/^## Сделано/m.test(tasks)) fail(`${TASKS}: секция «Сделано» живёт в ${TASKS_ARCHIVE}`);
+
+  // ---------- 10. Внешний репозиторий клиента (только предупреждения) ----------
   const readme = read('.ai/memory/README.md') ?? '';
   const authPath = readme.match(/(\/\S+\/auth-contract\.md)/)?.[1];
   if (authPath && existsSync(authPath)) {
