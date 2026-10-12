@@ -1,4 +1,7 @@
-import { InvitesService, type IssuedInvite } from '../invites/invites.service.js';
+import {
+  InvitesService,
+  type IssuedInvite,
+} from '../invites/invites.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface AdminInviteDeps {
@@ -7,17 +10,24 @@ export interface AdminInviteDeps {
   out: (line: string) => void;
 }
 
-const USAGE = 'usage: npm run admin:invite [-- --recover <userId> | --list-admins]';
+const USAGE =
+  'usage: npm run admin:invite [-- --recover <userId> | --list-admins]';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function printInvite(invite: IssuedInvite, out: (line: string) => void): number {
+function printInvite(
+  invite: IssuedInvite,
+  out: (line: string) => void,
+): number {
   out(invite.url);
   out(`expires: ${invite.expiresAt.toISOString()}`);
   return 0;
 }
 
 /** Команда `admin:invite`: чистая функция без доступа к process; возвращает код выхода. */
-export async function runAdminInvite(argv: string[], deps: AdminInviteDeps): Promise<number> {
+export async function runAdminInvite(
+  argv: string[],
+  deps: AdminInviteDeps,
+): Promise<number> {
   const { invites, prisma, out } = deps;
 
   if (argv.length === 0) {
@@ -42,7 +52,10 @@ export async function runAdminInvite(argv: string[], deps: AdminInviteDeps): Pro
       out('error: userId must be a UUID');
       return 1;
     }
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
     if (!user?.isAdmin) {
       out('error: admin user not found');
       return 1;

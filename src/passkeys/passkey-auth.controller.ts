@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
@@ -11,7 +19,10 @@ import { OriginGuard } from '../common/origin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { ConfigService } from '../config/config.service.js';
 import { parseCookies } from '../sessions/cookies.js';
-import { setCeremonyCookie, takeCeremonyId } from '../webauthn/ceremony-cookie.js';
+import {
+  setCeremonyCookie,
+  takeCeremonyId,
+} from '../webauthn/ceremony-cookie.js';
 import { type LoginVerifyDto, loginVerifySchema } from './dto/login.dto.js';
 import {
   type RegistrationOptionsDto,
@@ -32,10 +43,14 @@ export class PasskeyAuthController {
   @Post('register/options')
   @HttpCode(200)
   async registerOptions(
-    @Body(new ZodValidationPipe(registrationOptionsSchema)) dto: RegistrationOptionsDto,
+    @Body(new ZodValidationPipe(registrationOptionsSchema))
+    dto: RegistrationOptionsDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<PublicKeyCredentialCreationOptionsJSON> {
-    const { ceremonyId, options } = await this.service.startRegistration(dto.token, dto.name);
+    const { ceremonyId, options } = await this.service.startRegistration(
+      dto.token,
+      dto.name,
+    );
     setCeremonyCookie(res, this.config.get().publicUrl, ceremonyId);
     return options;
   }
@@ -43,7 +58,8 @@ export class PasskeyAuthController {
   @Post('register/verify')
   @HttpCode(201)
   async registerVerify(
-    @Body(new ZodValidationPipe(registrationVerifySchema)) dto: RegistrationVerifyDto,
+    @Body(new ZodValidationPipe(registrationVerifySchema))
+    dto: RegistrationVerifyDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionBody> {
@@ -51,11 +67,8 @@ export class PasskeyAuthController {
     const ceremonyId = takeCeremonyId(req, res, config.publicUrl);
     // прежняя cookie-сессия (если была) уничтожается в той же транзакции
     const previous = parseCookies(req.headers.cookie)[config.sessionCookieName];
-    const { body, sessionToken, expiresAt } = await this.service.finishRegistration(
-      ceremonyId,
-      dto,
-      previous,
-    );
+    const { body, sessionToken, expiresAt } =
+      await this.service.finishRegistration(ceremonyId, dto, previous);
     res.cookie(
       config.sessionCookieName,
       sessionToken,

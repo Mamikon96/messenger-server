@@ -11,9 +11,14 @@ export class WsChatEvents implements ChatEventsPublisher {
 
   publish(event: ChatEvent): void {
     try {
-      this.registry.sendTo(event.recipients, { type: event.type, payload: event.payload });
+      this.registry.sendTo(event.recipients, {
+        type: event.type,
+        payload: event.payload,
+      });
     } catch (error) {
-      this.logger.error(`failed to publish ${event.type}: ${(error as Error).message}`);
+      this.logger.error(
+        `failed to publish ${event.type}: ${(error as Error).message}`,
+      );
     }
   }
 }

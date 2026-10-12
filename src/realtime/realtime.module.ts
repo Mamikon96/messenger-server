@@ -7,7 +7,12 @@ import { WsChatEvents } from './ws-chat-events.js';
 
 @Module({
   imports: [SessionsModule],
-  providers: [ConnectionRegistry, RealtimeGateway, WsChatEvents, HeartbeatService],
+  providers: [
+    ConnectionRegistry,
+    RealtimeGateway,
+    WsChatEvents,
+    HeartbeatService,
+  ],
   exports: [ConnectionRegistry, WsChatEvents],
 })
 export class RealtimeModule {}

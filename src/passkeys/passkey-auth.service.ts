@@ -43,7 +43,10 @@ export class PasskeyAuthService {
   ) {}
 
   /** Шаг 1: проверяет инвайт и выдаёт параметры создания passkey; состояние хранится в церемонии. */
-  async startRegistration(token: string, name: string | undefined): Promise<RegistrationStarted> {
+  async startRegistration(
+    token: string,
+    name: string | undefined,
+  ): Promise<RegistrationStarted> {
     const invite = await this.invites.findUsable(token);
 
     let webauthnUserId: Uint8Array;
@@ -55,7 +58,12 @@ export class PasskeyAuthService {
       const user = invite.userId
         ? await this.prisma.user.findUnique({
             where: { id: invite.userId },
-            select: { id: true, name: true, webauthnUserId: true, disabledAt: true },
+            select: {
+              id: true,
+              name: true,
+              webauthnUserId: true,
+              disabledAt: true,
+            },
           })
         : null;
       if (!user) throw new AppError(404, 'invite_invalid');
@@ -68,7 +76,8 @@ export class PasskeyAuthService {
         select: { id: true, transports: true },
       });
     } else {
-      if (!name) throw new AppError(400, 'validation_failed', 'name is required');
+      if (!name)
+        throw new AppError(400, 'validation_failed', 'name is required');
       userName = name;
       webauthnUserId = new Uint8Array(randomBytes(32));
     }
@@ -97,7 +106,10 @@ export class PasskeyAuthService {
     const ceremony = await this.ceremonies.consume(ceremonyId, 'register');
     if (!ceremony.inviteId) throw new AppError(401, 'auth_failed');
     const inviteId = ceremony.inviteId;
-    const passkey = await this.webauthn.verifyRegistration(dto.credential, ceremony.challenge);
+    const passkey = await this.webauthn.verifyRegistration(
+      dto.credential,
+      ceremony.challenge,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const invite = await tx.invite.findUnique({ where: { id: inviteId } });
@@ -108,7 +120,12 @@ export class PasskeyAuthService {
         if (!invite.userId) throw new AppError(404, 'invite_invalid');
         // та же блокировка строки, что у отключения и входа: исключает гонку «отключение ↔ сессия»
         const locked = await tx.$queryRaw<
-          { id: string; name: string; avatar_url: string; disabled_at: Date | null }[]
+          {
+            id: string;
+            name: string;
+            avatar_url: string;
+            disabled_at: Date | null;
+          }[]
         >`SELECT id::text AS id, name, avatar_url, disabled_at FROM users WHERE id = ${invite.userId}::uuid FOR UPDATE`;
         const row = locked[0];
         if (!row) throw new AppError(404, 'invite_invalid');
@@ -116,7 +133,8 @@ export class PasskeyAuthService {
         user = { id: row.id, name: row.name, avatarUrl: row.avatar_url };
         await this.sessions.revokeAllForUser(user.id, tx);
       } else {
-        if (!ceremony.name || !ceremony.webauthnUserId) throw new AppError(401, 'auth_failed');
+        if (!ceremony.name || !ceremony.webauthnUserId)
+          throw new AppError(401, 'auth_failed');
         user = await tx.user.create({
           data: {
             name: ceremony.name,
@@ -130,7 +148,8 @@ export class PasskeyAuthService {
 
       await this.invites.claim(tx, inviteId, user.id);
       await this.passkeys.insert(tx, user.id, passkey, dto.passkeyName);
-      if (previousSessionToken) await this.sessions.destroy(previousSessionToken, tx);
+      if (previousSessionToken)
+        await this.sessions.destroy(previousSessionToken, tx);
       const session = await this.sessions.create(user.id, tx);
       return {
         body: { user, csrfToken: session.csrfToken },
@@ -168,20 +187,33 @@ export class PasskeyAuthService {
     });
     if (!stored) throw new AppError(401, 'auth_failed');
     const userHandle = credential.response.userHandle;
-    if (!userHandle || userHandle !== Buffer.from(stored.user.webauthnUserId).toString('base64url')) {
+    if (
+      !userHandle ||
+      userHandle !==
+        Buffer.from(stored.user.webauthnUserId).toString('base64url')
+    ) {
       throw new AppError(401, 'auth_failed');
     }
-    const { newCounter } = await this.webauthn.verifyAuthentication(credential, ceremony.challenge, {
-      id: stored.id,
-      publicKey: new Uint8Array(stored.publicKey),
-      counter: stored.counter,
-      transports: stored.transports,
-    });
+    const { newCounter } = await this.webauthn.verifyAuthentication(
+      credential,
+      ceremony.challenge,
+      {
+        id: stored.id,
+        publicKey: new Uint8Array(stored.publicKey),
+        counter: stored.counter,
+        transports: stored.transports,
+      },
+    );
 
     return this.prisma.$transaction(async (tx) => {
       // та же блокировка строки, что у отключения: исключает гонку «отключение ↔ сессия»
       const locked = await tx.$queryRaw<
-        { id: string; name: string; avatar_url: string; disabled_at: Date | null }[]
+        {
+          id: string;
+          name: string;
+          avatar_url: string;
+          disabled_at: Date | null;
+        }[]
       >`SELECT id::text AS id, name, avatar_url, disabled_at FROM users WHERE id = ${stored.userId}::uuid FOR UPDATE`;
       const row = locked[0];
       if (!row) throw new AppError(401, 'auth_failed');
@@ -197,7 +229,8 @@ export class PasskeyAuthService {
         data: { counter: newCounter, lastUsedAt: new Date() },
       });
       if (updated.count === 0) throw new AppError(401, 'auth_failed');
-      if (previousSessionToken) await this.sessions.destroy(previousSessionToken, tx);
+      if (previousSessionToken)
+        await this.sessions.destroy(previousSessionToken, tx);
       const session = await this.sessions.create(row.id, tx);
       return {
         body: {

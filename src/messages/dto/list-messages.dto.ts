@@ -16,6 +16,9 @@ export const listMessagesSchema = z
       .refine((n) => n >= 1 && n <= MAX_LIMIT, `limit must be 1..${MAX_LIMIT}`)
       .default(DEFAULT_LIMIT),
   })
-  .refine((q) => q.before === undefined || q.since === undefined, 'before and since are exclusive');
+  .refine(
+    (q) => q.before === undefined || q.since === undefined,
+    'before and since are exclusive',
+  );
 
 export type ListMessagesDto = z.infer<typeof listMessagesSchema>;

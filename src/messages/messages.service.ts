@@ -14,7 +14,8 @@ export interface MessagePageDto {
   hasMore: boolean;
 }
 
-const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+const LONE_SURROGATE =
+  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 @Injectable()
 export class MessagesService {
@@ -40,23 +41,43 @@ export class MessagesService {
     const result = await this.prisma.$transaction(async (tx) => {
       await this.access.requireMember(tx, chatId, userId, { lock: true });
       const existing = await tx.message.findUnique({
-        where: { chatId_senderId_clientId: { chatId, senderId: userId, clientId: dto.clientId } },
+        where: {
+          chatId_senderId_clientId: {
+            chatId,
+            senderId: userId,
+            clientId: dto.clientId,
+          },
+        },
       });
-      if (existing) return { message: toChatMessageDto(existing), created: false, recipients: [] };
+      if (existing)
+        return {
+          message: toChatMessageDto(existing),
+          created: false,
+          recipients: [],
+        };
 
       this.limiter.consume(userId);
       const [{ lastSeq }] = await tx.$queryRaw<{ lastSeq: number }[]>`
         UPDATE chats SET last_seq = last_seq + 1 WHERE id = ${chatId}::uuid
         RETURNING last_seq AS "lastSeq"`;
       const row = await tx.message.create({
-        data: { chatId, seq: lastSeq, senderId: userId, clientId: dto.clientId, body: dto.body },
+        data: {
+          chatId,
+          seq: lastSeq,
+          senderId: userId,
+          clientId: dto.clientId,
+          body: dto.body,
+        },
       });
       // Своё сообщение прочитано: seq нового сообщения всегда не меньше last_read_seq.
       await tx.chatMember.update({
         where: { chatId_userId: { chatId, userId } },
         data: { lastReadSeq: lastSeq },
       });
-      const members = await tx.chatMember.findMany({ where: { chatId }, select: { userId: true } });
+      const members = await tx.chatMember.findMany({
+        where: { chatId },
+        select: { userId: true },
+      });
       return {
         message: toChatMessageDto(row),
         created: true,
@@ -77,7 +98,11 @@ export class MessagesService {
    * `since` — догонка (по возрастанию), иначе страница истории до `before`; ответ всегда по возрастанию `seq`.
    * Читается `limit + 1` строк: лишняя строка — признак `hasMore` (BE-D23).
    */
-  async list(userId: string, chatId: string, query: ListMessagesDto): Promise<MessagePageDto> {
+  async list(
+    userId: string,
+    chatId: string,
+    query: ListMessagesDto,
+  ): Promise<MessagePageDto> {
     await this.access.requireMember(this.prisma, chatId, userId);
     const take = query.limit + 1;
     if (query.since !== undefined) {
@@ -92,7 +117,10 @@ export class MessagesService {
       };
     }
     const rows = await this.prisma.message.findMany({
-      where: { chatId, ...(query.before !== undefined ? { seq: { lt: query.before } } : {}) },
+      where: {
+        chatId,
+        ...(query.before !== undefined ? { seq: { lt: query.before } } : {}),
+      },
       orderBy: { seq: 'desc' },
       take,
     });
@@ -112,16 +140,29 @@ export class MessagesService {
       FROM chats c
       WHERE cm.chat_id = ${chatId}::uuid AND cm.user_id = ${userId}::uuid
         AND c.id = cm.chat_id AND c.last_seq >= ${seq}::int`;
-    if (updated === 0) throw new AppError(400, 'validation_failed', 'seq is beyond the last message');
+    if (updated === 0)
+      throw new AppError(
+        400,
+        'validation_failed',
+        'seq is beyond the last message',
+      );
   }
 
   private validateBody(body: string): void {
     if (body.includes('\u0000')) {
-      throw new AppError(400, 'validation_failed', 'body must not contain NUL characters');
+      throw new AppError(
+        400,
+        'validation_failed',
+        'body must not contain NUL characters',
+      );
     }
     // Одиночный суррогат не кодируется в UTF-8 и ломает запись в PostgreSQL.
     if (LONE_SURROGATE.test(body)) {
-      throw new AppError(400, 'validation_failed', 'body must be well-formed Unicode');
+      throw new AppError(
+        400,
+        'validation_failed',
+        'body must be well-formed Unicode',
+      );
     }
     if (body.trim().length === 0) {
       throw new AppError(400, 'validation_failed', 'body must not be empty');

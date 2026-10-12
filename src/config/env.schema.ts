@@ -31,7 +31,10 @@ const envSchema = z.object({
     .min(1)
     .transform((value, ctx) => {
       const origins: string[] = [];
-      for (const raw of value.split(',').map((origin) => origin.trim()).filter(Boolean)) {
+      for (const raw of value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)) {
         const origin = normalizeOrigin(raw);
         if (origin === null) {
           ctx.addIssue({ code: 'custom', message: `invalid origin: ${raw}` });

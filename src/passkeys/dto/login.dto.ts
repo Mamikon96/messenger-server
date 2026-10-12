@@ -15,7 +15,9 @@ const authenticationCredentialSchema = z.looseObject({
   }),
 });
 
-export const loginVerifySchema = z.object({ credential: authenticationCredentialSchema }).strict();
+export const loginVerifySchema = z
+  .object({ credential: authenticationCredentialSchema })
+  .strict();
 
 export interface LoginVerifyDto {
   credential: AuthenticationResponseJSON;

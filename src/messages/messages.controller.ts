@@ -14,10 +14,20 @@ import type { Response } from 'express';
 import type { ChatMessageDto } from '../chats/chat.mapper.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
-import { type ListMessagesDto, listMessagesSchema } from './dto/list-messages.dto.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
+import {
+  type ListMessagesDto,
+  listMessagesSchema,
+} from './dto/list-messages.dto.js';
 import { type ReadChatDto, readChatSchema } from './dto/read-chat.dto.js';
-import { type SendMessageDto, sendMessageSchema } from './dto/send-message.dto.js';
+import {
+  type SendMessageDto,
+  sendMessageSchema,
+} from './dto/send-message.dto.js';
 import { type MessagePageDto, MessagesService } from './messages.service.js';
 
 @Controller('chats/:id')
@@ -33,7 +43,11 @@ export class MessagesController {
     @CurrentSession() session: RequestSession,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ChatMessageDto> {
-    const { message, created } = await this.messages.send(session.userId, chatId, dto);
+    const { message, created } = await this.messages.send(
+      session.userId,
+      chatId,
+      dto,
+    );
     res.status(created ? 201 : 200);
     return message;
   }

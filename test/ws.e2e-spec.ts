@@ -7,7 +7,11 @@ import { ConfigService } from '../src/config/config.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './support/create-app.js';
 import { type TestLogin, loginAs, resetDb } from './support/db.js';
-import { type WsTestClient, connectWs, rejectedStatus } from './support/ws-client.js';
+import {
+  type WsTestClient,
+  connectWs,
+  rejectedStatus,
+} from './support/ws-client.js';
 
 describe('WebSocket handshake and frames (e2e)', () => {
   let app: INestApplication;
@@ -40,18 +44,26 @@ describe('WebSocket handshake and frames (e2e)', () => {
     });
 
     it('rejects a missing Origin with 403', async () => {
-      expect(await rejectedStatus(app, { cookie: alice.cookie, origin: null })).toBe(403);
+      expect(
+        await rejectedStatus(app, { cookie: alice.cookie, origin: null }),
+      ).toBe(403);
     });
 
     it('rejects a foreign Origin with 403', async () => {
       expect(
-        await rejectedStatus(app, { cookie: alice.cookie, origin: 'https://evil.example' }),
+        await rejectedStatus(app, {
+          cookie: alice.cookie,
+          origin: 'https://evil.example',
+        }),
       ).toBe(403);
     });
 
     it('checks Origin before the session', async () => {
       expect(
-        await rejectedStatus(app, { cookie: 'sid=garbage', origin: 'https://evil.example' }),
+        await rejectedStatus(app, {
+          cookie: 'sid=garbage',
+          origin: 'https://evil.example',
+        }),
       ).toBe(403);
     });
 
@@ -64,16 +76,22 @@ describe('WebSocket handshake and frames (e2e)', () => {
     });
 
     it('rejects a garbled cookie header with 401', async () => {
-      expect(await rejectedStatus(app, { cookie: 'sid=%E0%A4%A; ;=; sid' })).toBe(401);
+      expect(
+        await rejectedStatus(app, { cookie: 'sid=%E0%A4%A; ;=; sid' }),
+      ).toBe(401);
     });
 
     it('rejects an expired session with 401', async () => {
-      await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+      await prisma.session.updateMany({
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
       expect(await rejectedStatus(app, { cookie: alice.cookie })).toBe(401);
     });
 
     it('does not open a socket on another path', async () => {
-      expect(await rejectedStatus(app, { cookie: alice.cookie, path: '/ws2' })).toBeUndefined();
+      expect(
+        await rejectedStatus(app, { cookie: alice.cookie, path: '/ws2' }),
+      ).toBeUndefined();
     });
   });
 
@@ -93,7 +111,9 @@ describe('WebSocket handshake and frames (e2e)', () => {
     it('answers a binary frame with unsupported_type', async () => {
       const client = await connectWs(app, { cookie: alice.cookie });
       client.send(Buffer.from([1, 2, 3]));
-      expect((await client.next()).payload).toMatchObject({ code: 'unsupported_type' });
+      expect((await client.next()).payload).toMatchObject({
+        code: 'unsupported_type',
+      });
       client.close();
     });
 
@@ -130,9 +150,16 @@ describe('WebSocket handshake and frames (e2e)', () => {
   describe('event delivery', () => {
     const http = () => request(app.getHttpServer());
     const post = (as: TestLogin, url: string, body: object) =>
-      http().post(url).set('Cookie', as.cookie).set('X-CSRF-Token', as.csrf).send(body);
+      http()
+        .post(url)
+        .set('Cookie', as.cookie)
+        .set('X-CSRF-Token', as.csrf)
+        .send(body);
     const sendMessage = (as: TestLogin, chatId: string, body = 'hi') =>
-      post(as, `/api/chats/${chatId}/messages`, { clientId: randomUUID(), body });
+      post(as, `/api/chats/${chatId}/messages`, {
+        clientId: randomUUID(),
+        body,
+      });
     const createGroup = async (owner: TestLogin, members: TestLogin[]) =>
       (
         await post(owner, '/api/chats', {
@@ -191,7 +218,10 @@ describe('WebSocket handshake and frames (e2e)', () => {
         .set('X-CSRF-Token', alice.csrf)
         .expect(204);
       const removed = await bobTab.next();
-      expect(removed).toEqual({ type: 'chat.removed', payload: { chatId: chatA.id } });
+      expect(removed).toEqual({
+        type: 'chat.removed',
+        payload: { chatId: chatA.id },
+      });
 
       await sendMessage(alice, chatA.id, 'in A').expect(201);
       await sendMessage(alice, chatB.id, 'marker').expect(201);
@@ -209,7 +239,9 @@ describe('WebSocket handshake and frames (e2e)', () => {
       const bobTab = await open(bob);
       const carolTab = await open(carol);
 
-      await post(alice, `/api/chats/${chat.id}/members`, { userId: carol.userId }).expect(204);
+      await post(alice, `/api/chats/${chat.id}/members`, {
+        userId: carol.userId,
+      }).expect(204);
 
       const created = await carolTab.next();
       expect(created.type).toBe('chat.created');
@@ -318,7 +350,9 @@ describe('WebSocket lifecycle (e2e)', () => {
 
   it('closes a socket with 4401 once its session expiry time passes', async () => {
     await startApp();
-    await prisma.session.updateMany({ data: { expiresAt: new Date(Date.now() + 300) } });
+    await prisma.session.updateMany({
+      data: { expiresAt: new Date(Date.now() + 300) },
+    });
     const tab = await connectWs(app, { cookie: alice.cookie });
     expect((await tab.closed).code).toBe(4401);
   });
@@ -336,7 +370,10 @@ describe('WebSocket lifecycle (e2e)', () => {
 
   it('terminates a client that does not answer pings', async () => {
     await startApp();
-    const silent = await connectWs(app, { cookie: alice.cookie, autoPong: false });
+    const silent = await connectWs(app, {
+      cookie: alice.cookie,
+      autoPong: false,
+    });
     await silent.closed;
     expect(silent.socket.readyState).toBe(3);
   });

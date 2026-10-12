@@ -9,7 +9,9 @@ export class AdminGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const { session } = context.switchToHttp().getRequest<SessionRequest>();
-    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+    });
     if (!user?.isAdmin) throw new AppError(403, 'forbidden');
     return true;
   }

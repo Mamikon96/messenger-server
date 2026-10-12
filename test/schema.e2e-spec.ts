@@ -9,7 +9,9 @@ describe('DB schema (e2e)', () => {
   let close: () => Promise<void>;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [PrismaModule] }).compile();
+    const moduleRef = await Test.createTestingModule({
+      imports: [PrismaModule],
+    }).compile();
     await moduleRef.init();
     prisma = moduleRef.get(PrismaService);
     close = () => moduleRef.close();
@@ -31,21 +33,33 @@ describe('DB schema (e2e)', () => {
 
   it('rejects a duplicate webauthn_user_id', async () => {
     const webauthnUserId = randomBytes(32);
-    await prisma.user.create({ data: { name: 'a', avatarUrl: '', webauthnUserId } });
+    await prisma.user.create({
+      data: { name: 'a', avatarUrl: '', webauthnUserId },
+    });
     await expect(
-      prisma.user.create({ data: { name: 'b', avatarUrl: '', webauthnUserId } }),
+      prisma.user.create({
+        data: { name: 'b', avatarUrl: '', webauthnUserId },
+      }),
     ).rejects.toMatchObject({ code: 'P2002' });
   });
 
-  const insertInvite = (kind: 'join' | 'recovery', userId: string | null, tokenHash = 'h1') =>
+  const insertInvite = (
+    kind: 'join' | 'recovery',
+    userId: string | null,
+    tokenHash = 'h1',
+  ) =>
     prisma.$executeRaw`
       INSERT INTO invites (id, token_hash, kind, user_id, expires_at)
       VALUES (gen_random_uuid(), ${tokenHash}, ${kind}::"InviteKind", ${userId}::uuid, now() + interval '1 day')`;
 
   it('rejects a recovery invite without user_id and a join invite with user_id', async () => {
     const user = await newUser();
-    await expect(insertInvite('recovery', null)).rejects.toThrow(/invites_kind_target/);
-    await expect(insertInvite('join', user.id)).rejects.toThrow(/invites_kind_target/);
+    await expect(insertInvite('recovery', null)).rejects.toThrow(
+      /invites_kind_target/,
+    );
+    await expect(insertInvite('join', user.id)).rejects.toThrow(
+      /invites_kind_target/,
+    );
     await expect(insertInvite('join', null)).resolves.toBe(1);
     await expect(insertInvite('recovery', user.id, 'h2')).resolves.toBe(1);
   });
@@ -66,16 +80,26 @@ describe('DB schema (e2e)', () => {
   });
 
   it('rejects a duplicate invite token_hash', async () => {
-    const data = { tokenHash: 'same', kind: 'join' as const, expiresAt: new Date(Date.now() + 1000) };
+    const data = {
+      tokenHash: 'same',
+      kind: 'join' as const,
+      expiresAt: new Date(Date.now() + 1000),
+    };
     await prisma.invite.create({ data });
-    await expect(prisma.invite.create({ data })).rejects.toMatchObject({ code: 'P2002' });
+    await expect(prisma.invite.create({ data })).rejects.toMatchObject({
+      code: 'P2002',
+    });
   });
 
   it('rejects an unknown challenge purpose and passkey device_type', async () => {
     const user = await newUser();
     await expect(
       prisma.webauthnChallenge.create({
-        data: { challenge: 'c', purpose: 'bogus', expiresAt: new Date(Date.now() + 1000) },
+        data: {
+          challenge: 'c',
+          purpose: 'bogus',
+          expiresAt: new Date(Date.now() + 1000),
+        },
       }),
     ).rejects.toThrow(/webauthn_challenges_purpose/);
     await expect(
@@ -125,16 +149,27 @@ describe('DB schema (e2e)', () => {
     const user = await newUser();
     const before = Date.now();
     const session = await prisma.session.create({
-      data: { id: 's', userId: user.id, csrfToken: 'c', expiresAt: new Date(before + 1000) },
+      data: {
+        id: 's',
+        userId: user.id,
+        csrfToken: 'c',
+        expiresAt: new Date(before + 1000),
+      },
     });
     expect(Math.abs(session.createdAt.getTime() - before)).toBeLessThan(5000);
   });
 
   it('rejects a duplicate chats.direct_key', async () => {
     const user = await newUser();
-    const data = { type: 'direct' as const, directKey: 'a:b', createdById: user.id };
+    const data = {
+      type: 'direct' as const,
+      directKey: 'a:b',
+      createdById: user.id,
+    };
     await prisma.chat.create({ data });
-    await expect(prisma.chat.create({ data })).rejects.toMatchObject({ code: 'P2002' });
+    await expect(prisma.chat.create({ data })).rejects.toMatchObject({
+      code: 'P2002',
+    });
   });
 
   it('rejects duplicate (chat_id, seq) and (chat_id, sender_id, client_id) in messages', async () => {
@@ -153,7 +188,11 @@ describe('DB schema (e2e)', () => {
   });
 
   describe('chats_type_shape CHECK', () => {
-    const insert = async (type: 'direct' | 'group', directKey: string | null, title: string | null) => {
+    const insert = async (
+      type: 'direct' | 'group',
+      directKey: string | null,
+      title: string | null,
+    ) => {
       const user = await newUser();
       return prisma.$executeRaw`
         INSERT INTO chats (id, type, direct_key, title, created_by)
@@ -161,19 +200,27 @@ describe('DB schema (e2e)', () => {
     };
 
     it('rejects a direct chat with a title', async () => {
-      await expect(insert('direct', 'a:b', 't')).rejects.toThrow(/chats_type_shape/);
+      await expect(insert('direct', 'a:b', 't')).rejects.toThrow(
+        /chats_type_shape/,
+      );
     });
 
     it('rejects a direct chat without direct_key', async () => {
-      await expect(insert('direct', null, null)).rejects.toThrow(/chats_type_shape/);
+      await expect(insert('direct', null, null)).rejects.toThrow(
+        /chats_type_shape/,
+      );
     });
 
     it('rejects a group chat without a title', async () => {
-      await expect(insert('group', null, null)).rejects.toThrow(/chats_type_shape/);
+      await expect(insert('group', null, null)).rejects.toThrow(
+        /chats_type_shape/,
+      );
     });
 
     it('rejects a group chat with direct_key', async () => {
-      await expect(insert('group', 'a:b', 't')).rejects.toThrow(/chats_type_shape/);
+      await expect(insert('group', 'a:b', 't')).rejects.toThrow(
+        /chats_type_shape/,
+      );
     });
 
     it('accepts valid direct and group chats', async () => {

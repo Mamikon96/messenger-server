@@ -5,7 +5,9 @@ import { runAdminInvite } from './admin-invite-command.js';
 import { CliModule } from './cli.module.js';
 
 async function main(): Promise<void> {
-  const app = await NestFactory.createApplicationContext(CliModule, { logger: ['error'] });
+  const app = await NestFactory.createApplicationContext(CliModule, {
+    logger: ['error'],
+  });
   try {
     process.exitCode = await runAdminInvite(process.argv.slice(2), {
       invites: app.get(InvitesService),

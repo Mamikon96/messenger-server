@@ -11,7 +11,7 @@ fail() { echo "  ✗ $1"; errors=$((errors + 1)); }
 
 echo "==> Проверка памяти ($MEM)"
 
-for f in README.md decisions.md product-agreements.md; do
+for f in README.md decisions.md product-agreements.md tasks-archive.md; do
   [ -f "$MEM/$f" ] || fail "нет файла $MEM/$f"
 done
 
@@ -37,7 +37,7 @@ check_side() {
   done
 
   if [ -f "$dir/tasks.md" ]; then
-    for sec in "## В работе" "## Бэклог" "## Сделано"; do
+    for sec in "## В работе" "## Бэклог"; do
       grep -q "^$sec" "$dir/tasks.md" || fail "$dir/tasks.md: нет секции '$sec'"
     done
 
@@ -56,10 +56,14 @@ check_side() {
       echo "$wip" | grep -q 'Осталось' || fail "$dir/tasks.md: в «В работе» есть задачи без блока «Осталось»"
     fi
 
-    # «Сделано»: каждая запись начинается с даты
+  fi
+
+  # Архив «Сделано» (.ai/memory/tasks-archive.md): каждая запись начинается с даты
+  if [ -f "$dir/tasks-archive.md" ]; then
+    grep -q '^## Сделано' "$dir/tasks-archive.md" || fail "$dir/tasks-archive.md: нет секции '## Сделано'"
     local done_bad
-    done_bad=$(awk '/^## Сделано/{f=1;next} /^## /{f=0} f && /^- /' "$dir/tasks.md" | grep -vE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} — ' || true)
-    [ -z "$done_bad" ] || fail "$dir/tasks.md: записи «Сделано» без даты 'ГГГГ-ММ-ДД — ': $(echo "$done_bad" | head -1)"
+    done_bad=$(awk '/^## Сделано/{f=1;next} /^## /{f=0} f && /^- /' "$dir/tasks-archive.md" | grep -vE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} — ' || true)
+    [ -z "$done_bad" ] || fail "$dir/tasks-archive.md: записи «Сделано» без даты 'ГГГГ-ММ-ДД — ': $(echo "$done_bad" | head -1)"
   fi
 }
 
@@ -77,7 +81,7 @@ tasks="$MEM/tasks.md"
 if [ -f "$tasks" ] && git rev-parse --git-dir >/dev/null 2>&1; then
   while IFS= read -r p; do
     [ -f "$p" ] && [ "$p" -nt "$tasks" ] && fail "$p изменён позже $tasks — актуализируй задачи в памяти (и штамп)"
-  done < <(git status --porcelain -uall -- src test scripts prisma docs .env.example package.json vitest.config.ts vitest.config.e2e.ts 2>/dev/null | awk '{print $NF}')
+  done < <(git status --porcelain -uall -- src test scripts prisma docs .claude .env.example package.json vitest.config.ts vitest.config.e2e.ts 2>/dev/null | awk '{print $NF}')
 fi
 
 # Ссылки на файлы в обратных кавычках должны существовать (src/, test/, scripts/, .ai/, корневые конфиги, ../ относительно файла)

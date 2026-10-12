@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, createParamDecorator } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  createParamDecorator,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { AppError } from '../common/app-error.js';
 import { SessionsService } from './sessions.service.js';

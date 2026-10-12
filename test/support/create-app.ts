@@ -16,7 +16,9 @@ export interface TestAppOptions {
   listen?: boolean;
 }
 
-export async function createTestApp(options: TestAppOptions = {}): Promise<INestApplication> {
+export async function createTestApp(
+  options: TestAppOptions = {},
+): Promise<INestApplication> {
   let builder = Test.createTestingModule({
     imports: [AppModule, ...(options.imports ?? [])],
     controllers: options.controllers,

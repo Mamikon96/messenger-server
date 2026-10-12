@@ -28,8 +28,14 @@ describe('Users (e2e)', () => {
   it('returns users sorted by name with exactly id, name, avatarUrl', async () => {
     const me = await loginAs(app, { name: 'Zed' });
     await loginAs(app, { name: 'Alice', isAdmin: true });
-    const res = await request(app.getHttpServer()).get('/api/users').set('Cookie', me.cookie).expect(200);
-    expect(res.body.map((u: { name: string }) => u.name)).toEqual(['Alice', 'Zed']);
+    const res = await request(app.getHttpServer())
+      .get('/api/users')
+      .set('Cookie', me.cookie)
+      .expect(200);
+    expect(res.body.map((u: { name: string }) => u.name)).toEqual([
+      'Alice',
+      'Zed',
+    ]);
     for (const user of res.body) {
       expect(Object.keys(user).sort()).toEqual(['avatarUrl', 'id', 'name']);
     }
@@ -38,7 +44,10 @@ describe('Users (e2e)', () => {
   it('GET /users hides disabled users', async () => {
     const me = await loginAs(app, { name: 'Me' });
     const disabled = await loginAs(app, { name: 'Disabled', disabled: true });
-    const res = await request(app.getHttpServer()).get('/api/users').set('Cookie', me.cookie).expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/users')
+      .set('Cookie', me.cookie)
+      .expect(200);
     const ids = res.body.map((u: { id: string }) => u.id);
     expect(ids).toContain(me.userId);
     expect(ids).not.toContain(disabled.userId);

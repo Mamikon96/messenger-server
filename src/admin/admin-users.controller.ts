@@ -1,8 +1,23 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  UseGuards,
+} from '@nestjs/common';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
-import { type AdminUserItem, AdminUsersService } from './admin-users.service.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
+import {
+  type AdminUserItem,
+  AdminUsersService,
+} from './admin-users.service.js';
 import { AdminGuard } from './admin.guard.js';
 import { type UpdateUserDto, updateUserSchema } from './dto/update-user.dto.js';
 

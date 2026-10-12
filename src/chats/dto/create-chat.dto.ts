@@ -11,9 +11,15 @@ const groupSchema = z.object({
   memberIds: z
     .array(z.uuid())
     .min(1)
-    .refine((ids) => new Set(ids).size === ids.length, 'memberIds must be unique'),
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      'memberIds must be unique',
+    ),
 });
 
-export const createChatSchema = z.discriminatedUnion('type', [directSchema, groupSchema]);
+export const createChatSchema = z.discriminatedUnion('type', [
+  directSchema,
+  groupSchema,
+]);
 
 export type CreateChatDto = z.infer<typeof createChatSchema>;

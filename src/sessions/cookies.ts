@@ -1,4 +1,6 @@
-export function parseCookies(header: string | undefined): Record<string, string> {
+export function parseCookies(
+  header: string | undefined,
+): Record<string, string> {
   const cookies: Record<string, string> = {};
   if (!header) return cookies;
   for (const part of header.split(';')) {

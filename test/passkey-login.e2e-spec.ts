@@ -21,7 +21,8 @@ describe('Passkey login (e2e)', () => {
   let admin: TestLogin;
 
   const http = () => request(app.getHttpServer());
-  const pub = (path: string) => http().post(`/api${path}`).set('Origin', ORIGIN);
+  const pub = (path: string) =>
+    http().post(`/api${path}`).set('Origin', ORIGIN);
   const loginOptions = () => pub('/auth/passkey/login/options').send({});
   const loginVerify = (cookies: (string | undefined)[], body: object) =>
     pub('/auth/passkey/login/verify')
@@ -63,7 +64,10 @@ describe('Passkey login (e2e)', () => {
     const again = await loginWithPasskey(app, auth);
     expect(again.userId).toBe(login.userId);
     expect(again.cookie).not.toBe(login.cookie);
-    const session = await http().get('/api/auth/session').set('Cookie', again.cookie).expect(200);
+    const session = await http()
+      .get('/api/auth/session')
+      .set('Cookie', again.cookie)
+      .expect(200);
     expect(session.body.user.name).toBe('Alice');
     const client = await connectWs(app, { cookie: again.cookie });
     expect(client.socket.readyState).toBe(1);
@@ -73,11 +77,17 @@ describe('Passkey login (e2e)', () => {
   it('previous sid cookie is destroyed on login', async () => {
     const { auth, login } = await newUser('Alice');
     const options = await loginOptions().expect(200);
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony'), login.cookie], {
-      credential: auth.getAssertion(options.body),
-    }).expect(200);
+    const res = await loginVerify(
+      [cookieFrom(options, 'wa_ceremony'), login.cookie],
+      {
+        credential: auth.getAssertion(options.body),
+      },
+    ).expect(200);
     const fresh = cookieFrom(res, 'sid')!;
-    await http().get('/api/auth/session').set('Cookie', login.cookie).expect(401);
+    await http()
+      .get('/api/auth/session')
+      .set('Cookie', login.cookie)
+      .expect(401);
     await http().get('/api/auth/session').set('Cookie', fresh).expect(200);
   });
 
@@ -96,7 +106,9 @@ describe('Passkey login (e2e)', () => {
     const options = await loginOptions().expect(200);
     const credential = auth.getAssertion(options.body);
     await prisma.passkey.deleteMany();
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
   });
 
@@ -108,7 +120,9 @@ describe('Passkey login (e2e)', () => {
     const credential = auth.getAssertion(options.body, {
       userHandle: Buffer.from(bob.webauthnUserId).toString('base64url'),
     });
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
   });
 
@@ -116,7 +130,9 @@ describe('Passkey login (e2e)', () => {
     const { auth } = await newUser('Alice');
     const options = await loginOptions().expect(200);
     const credential = auth.getAssertion(options.body, { userHandle: null });
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
   });
 
@@ -125,7 +141,9 @@ describe('Passkey login (e2e)', () => {
     const options = await loginOptions().expect(200);
     const credential = auth.getAssertion(options.body);
     credential.response.userHandle = null as unknown as string;
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
   });
 
@@ -133,8 +151,12 @@ describe('Passkey login (e2e)', () => {
     const { auth } = await newUser('Alice');
     const sessions = await prisma.session.count();
     const options = await loginOptions().expect(200);
-    const credential = auth.getAssertion(options.body, { origin: 'http://evil.example' });
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const credential = auth.getAssertion(options.body, {
+      origin: 'http://evil.example',
+    });
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
     expect(await prisma.session.count()).toBe(sessions);
   });
@@ -148,7 +170,11 @@ describe('Passkey login (e2e)', () => {
     foreign.createCredential({
       challenge: 'c',
       rp: { name: 'evil', id: 'evil.example' },
-      user: { id: Buffer.from(registered.userId).toString('base64url'), name: 'a', displayName: 'a' },
+      user: {
+        id: Buffer.from(registered.userId).toString('base64url'),
+        name: 'a',
+        displayName: 'a',
+      },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
     });
     const sessions = await prisma.session.count();
@@ -158,9 +184,15 @@ describe('Passkey login (e2e)', () => {
     });
     credential.id = registered.id;
     credential.rawId = registered.id;
-    const handle = await prisma.user.findFirstOrThrow({ where: { id: registered.userId } });
-    credential.response.userHandle = Buffer.from(handle.webauthnUserId).toString('base64url');
-    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    const handle = await prisma.user.findFirstOrThrow({
+      where: { id: registered.userId },
+    });
+    credential.response.userHandle = Buffer.from(
+      handle.webauthnUserId,
+    ).toString('base64url');
+    const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
     expect(await prisma.session.count()).toBe(sessions);
   });
@@ -169,11 +201,13 @@ describe('Passkey login (e2e)', () => {
   async function mutateAfterVerify(mutate: () => Promise<unknown>) {
     const webauthn = app.get(WebauthnService);
     const original = webauthn.verifyAuthentication.bind(webauthn);
-    const spy = vi.spyOn(webauthn, 'verifyAuthentication').mockImplementation(async (...args) => {
-      const result = await original(...args);
-      await mutate();
-      return result;
-    });
+    const spy = vi
+      .spyOn(webauthn, 'verifyAuthentication')
+      .mockImplementation(async (...args) => {
+        const result = await original(...args);
+        await mutate();
+        return result;
+      });
     return spy;
   }
 
@@ -184,7 +218,9 @@ describe('Passkey login (e2e)', () => {
     const credential = auth.getAssertion(options.body);
     const spy = await mutateAfterVerify(() => prisma.passkey.deleteMany());
     try {
-      const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+      const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+        credential,
+      }).expect(401);
       expect(res.body.error.code).toBe('auth_failed');
     } finally {
       spy.mockRestore();
@@ -197,9 +233,13 @@ describe('Passkey login (e2e)', () => {
     const sessions = await prisma.session.count();
     const options = await loginOptions().expect(200);
     const credential = auth.getAssertion(options.body);
-    const spy = await mutateAfterVerify(() => prisma.passkey.updateMany({ data: { counter: 1000n } }));
+    const spy = await mutateAfterVerify(() =>
+      prisma.passkey.updateMany({ data: { counter: 1000n } }),
+    );
     try {
-      await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+      await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+        credential,
+      }).expect(401);
     } finally {
       spy.mockRestore();
     }
@@ -211,14 +251,18 @@ describe('Passkey login (e2e)', () => {
     const { auth } = await newUser('Alice');
     const options = await loginOptions().expect(200);
     const credential = auth.getAssertion(options.body, { uv: false });
-    await loginVerify([cookieFrom(options, 'wa_ceremony')], { credential }).expect(401);
+    await loginVerify([cookieFrom(options, 'wa_ceremony')], {
+      credential,
+    }).expect(401);
   });
 
   it('reused ceremony -> 401', async () => {
     const { auth } = await newUser('Alice');
     const options = await loginOptions().expect(200);
     const ceremony = cookieFrom(options, 'wa_ceremony');
-    await loginVerify([ceremony], { credential: auth.getAssertion(options.body) }).expect(200);
+    await loginVerify([ceremony], {
+      credential: auth.getAssertion(options.body),
+    }).expect(200);
     const res = await loginVerify([ceremony], {
       credential: auth.getAssertion(options.body),
     }).expect(401);
@@ -227,13 +271,18 @@ describe('Passkey login (e2e)', () => {
 
   it('disabled user -> 403 user_disabled and no session is created', async () => {
     const { auth, login } = await newUser('Alice');
-    await prisma.user.update({ where: { id: login.userId }, data: { disabledAt: new Date() } });
+    await prisma.user.update({
+      where: { id: login.userId },
+      data: { disabledAt: new Date() },
+    });
     const options = await loginOptions().expect(200);
     const res = await loginVerify([cookieFrom(options, 'wa_ceremony')], {
       credential: auth.getAssertion(options.body),
     }).expect(403);
     expect(res.body.error.code).toBe('user_disabled');
-    expect(await prisma.session.count({ where: { userId: login.userId } })).toBe(1);
+    expect(
+      await prisma.session.count({ where: { userId: login.userId } }),
+    ).toBe(1);
   });
 
   it('parallel disable (PATCH /admin/users/:id) and login/verify -> afterwards the user has no live session', async () => {
@@ -251,7 +300,9 @@ describe('Passkey login (e2e)', () => {
         loginVerify([ceremony], { credential }),
       ]);
       expect([200, 403]).toContain(verify.status);
-      expect(await prisma.session.count({ where: { userId: login.userId } })).toBe(0);
+      expect(
+        await prisma.session.count({ where: { userId: login.userId } }),
+      ).toBe(0);
       await http()
         .patch(`/api/admin/users/${login.userId}`)
         .set('Cookie', admin.cookie)
@@ -262,7 +313,10 @@ describe('Passkey login (e2e)', () => {
   });
 
   it('no Origin -> 403 forbidden', async () => {
-    const res = await http().post('/api/auth/passkey/login/options').send({}).expect(403);
+    const res = await http()
+      .post('/api/auth/passkey/login/options')
+      .send({})
+      .expect(403);
     expect(res.body.error.code).toBe('forbidden');
   });
 

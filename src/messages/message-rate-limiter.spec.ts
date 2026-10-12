@@ -3,7 +3,9 @@ import type { ConfigService } from '../config/config.service.js';
 import { MessageRateLimiter } from './message-rate-limiter.js';
 
 const config = (limit: number) =>
-  ({ get: () => ({ messageRatePerMinute: limit }) }) as unknown as ConfigService;
+  ({
+    get: () => ({ messageRatePerMinute: limit }),
+  }) as unknown as ConfigService;
 
 function rejection(fn: () => void): AppError {
   try {
@@ -52,7 +54,9 @@ describe('MessageRateLimiter', () => {
     const limiter = new MessageRateLimiter(config(1));
     limiter.consume('u1');
     vi.advanceTimersByTime(20_000);
-    expect(rejection(() => limiter.consume('u1')).headers).toEqual({ 'Retry-After': '40' });
+    expect(rejection(() => limiter.consume('u1')).headers).toEqual({
+      'Retry-After': '40',
+    });
   });
 
   it('does not count rejected attempts', () => {

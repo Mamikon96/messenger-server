@@ -4,3 +4,4 @@ dist/
 *.tsbuildinfo
 .superpowers/
 src/generated/
+.claude/settings.local.json

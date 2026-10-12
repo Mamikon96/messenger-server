@@ -16,11 +16,21 @@ import type { Request, Response } from 'express';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { ConfigService } from '../config/config.service.js';
 import { CsrfGuard } from '../sessions/csrf.guard.js';
-import { CurrentSession, type RequestSession, SessionGuard } from '../sessions/session.guard.js';
-import { setCeremonyCookie, takeCeremonyId } from '../webauthn/ceremony-cookie.js';
+import {
+  CurrentSession,
+  type RequestSession,
+  SessionGuard,
+} from '../sessions/session.guard.js';
+import {
+  setCeremonyCookie,
+  takeCeremonyId,
+} from '../webauthn/ceremony-cookie.js';
 import type { PasskeyItem } from '../webauthn/passkey-store.js';
 import { type AddPasskeyDto, addPasskeySchema } from './dto/add-passkey.dto.js';
-import { type RenamePasskeyDto, renamePasskeySchema } from './dto/rename-passkey.dto.js';
+import {
+  type RenamePasskeyDto,
+  renamePasskeySchema,
+} from './dto/rename-passkey.dto.js';
 import { MePasskeysService } from './me-passkeys.service.js';
 
 @Controller('me/passkeys')
@@ -70,7 +80,10 @@ export class MePasskeysController {
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@CurrentSession() session: RequestSession, @Param('id') id: string): Promise<void> {
+  remove(
+    @CurrentSession() session: RequestSession,
+    @Param('id') id: string,
+  ): Promise<void> {
     return this.service.remove(session.userId, id);
   }
 }

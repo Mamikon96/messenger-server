@@ -29,17 +29,27 @@ export class AdminUsersService {
 
   /** Все пользователи, включая отключённых. */
   list(): Promise<AdminUserItem[]> {
-    return this.prisma.user.findMany({ select, orderBy: [{ name: 'asc' }, { id: 'asc' }] });
+    return this.prisma.user.findMany({
+      select,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
   }
 
-  async update(actorId: string, id: string, dto: UpdateUserDto): Promise<AdminUserItem> {
+  async update(
+    actorId: string,
+    id: string,
+    dto: UpdateUserDto,
+  ): Promise<AdminUserItem> {
     if (id === actorId) throw new AppError(403, 'forbidden');
     return this.prisma.$transaction(async (tx) => {
       // та же блокировка строки, что берут вход и восстановление (гонка «отключение ↔ вход»)
       const locked = await tx.$queryRaw<{ id: string }[]>`
         SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
       if (locked.length === 0) throw new AppError(404, 'not_found');
-      const current = await tx.user.findUniqueOrThrow({ where: { id }, select });
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id },
+        select,
+      });
       const disabledAt =
         dto.disabled === undefined
           ? undefined

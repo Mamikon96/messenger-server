@@ -1,6 +1,10 @@
 import type { ConfigService } from '../config/config.service.js';
 import type { SessionsService } from '../sessions/sessions.service.js';
-import { type Connection, ConnectionRegistry, type WsLike } from './connection-registry.js';
+import {
+  type Connection,
+  ConnectionRegistry,
+  type WsLike,
+} from './connection-registry.js';
 import { HeartbeatService } from './heartbeat.service.js';
 
 const fakeSocket = (overrides: Partial<WsLike> = {}) =>
@@ -12,15 +16,24 @@ const fakeSocket = (overrides: Partial<WsLike> = {}) =>
     terminate: vi.fn(),
     ping: vi.fn(),
     ...overrides,
-  }) as WsLike & Record<'send' | 'close' | 'terminate' | 'ping', ReturnType<typeof vi.fn>>;
+  }) as WsLike &
+    Record<'send' | 'close' | 'terminate' | 'ping', ReturnType<typeof vi.fn>>;
 
 function setup(existing: string[] = ['s1', 's2', 's3']) {
-  const config = { get: () => ({ wsHeartbeatMs: 1000, wsMaxSocketsPerUser: 10 }) } as ConfigService;
+  const config = {
+    get: () => ({ wsHeartbeatMs: 1000, wsMaxSocketsPerUser: 10 }),
+  } as ConfigService;
   const registry = new ConnectionRegistry(config);
-  const existingIds = vi.fn(async (ids: string[]) => new Set(ids.filter((id) => existing.includes(id))));
+  const existingIds = vi.fn(
+    async (ids: string[]) => new Set(ids.filter((id) => existing.includes(id))),
+  );
   const sessions = { existingIds } as unknown as SessionsService;
   const service = new HeartbeatService(registry, sessions, config);
-  const add = (id: string, socket = fakeSocket(), expiresInMs = 60_000): Connection =>
+  const add = (
+    id: string,
+    socket = fakeSocket(),
+    expiresInMs = 60_000,
+  ): Connection =>
     registry.add({
       socket,
       userId: `u-${id}`,

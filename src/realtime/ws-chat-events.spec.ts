@@ -11,7 +11,9 @@ const event: ChatEvent = {
 describe('WsChatEvents', () => {
   it('forwards type and payload to the recipients without the recipients list', () => {
     const sendTo = vi.fn();
-    new WsChatEvents({ sendTo } as unknown as ConnectionRegistry).publish(event);
+    new WsChatEvents({ sendTo } as unknown as ConnectionRegistry).publish(
+      event,
+    );
     expect(sendTo).toHaveBeenCalledWith(['u1', 'u2'], {
       type: 'chat.removed',
       payload: { chatId: 'c1' },

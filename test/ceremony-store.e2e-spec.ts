@@ -8,7 +8,10 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { CeremonyStore } from '../src/webauthn/ceremony-store.js';
 import { PasskeyStore } from '../src/webauthn/passkey-store.js';
 import { WebauthnModule } from '../src/webauthn/webauthn.module.js';
-import { type NewPasskey, WebauthnService } from '../src/webauthn/webauthn.service.js';
+import {
+  type NewPasskey,
+  WebauthnService,
+} from '../src/webauthn/webauthn.service.js';
 import { FakeAuthenticator } from './support/fake-authenticator.js';
 import { resetDb } from './support/db.js';
 
@@ -59,9 +62,18 @@ describe('WebAuthn ceremonies', () => {
   }
 
   it('consume returns the ceremony once and throws auth_failed the second time', async () => {
-    const id = await store.create({ ...base, name: 'Alice', webauthnUserId: randomBytes(32) });
+    const id = await store.create({
+      ...base,
+      name: 'Alice',
+      webauthnUserId: randomBytes(32),
+    });
     const ceremony = await store.consume(id, 'login');
-    expect(ceremony).toMatchObject({ id, challenge: 'ch', purpose: 'login', name: 'Alice' });
+    expect(ceremony).toMatchObject({
+      id,
+      challenge: 'ch',
+      purpose: 'login',
+      name: 'Alice',
+    });
     expect(ceremony.webauthnUserId).toBeInstanceOf(Uint8Array);
     await expectAuthFailed(store.consume(id, 'login'));
   });
@@ -75,7 +87,12 @@ describe('WebAuthn ceremonies', () => {
   it('expired ceremony throws auth_failed', async () => {
     const id = randomUUID();
     await prisma.webauthnChallenge.create({
-      data: { id, challenge: 'x', purpose: 'login', expiresAt: new Date(Date.now() - 1000) },
+      data: {
+        id,
+        challenge: 'x',
+        purpose: 'login',
+        expiresAt: new Date(Date.now() - 1000),
+      },
     });
     await expectAuthFailed(store.consume(id, 'login'));
   });
@@ -87,18 +104,30 @@ describe('WebAuthn ceremonies', () => {
 
   it('create purges expired rows', async () => {
     await prisma.webauthnChallenge.create({
-      data: { challenge: 'old', purpose: 'login', expiresAt: new Date(Date.now() - 1000) },
+      data: {
+        challenge: 'old',
+        purpose: 'login',
+        expiresAt: new Date(Date.now() - 1000),
+      },
     });
     await store.create(base);
-    expect(await prisma.webauthnChallenge.count({ where: { challenge: 'old' } })).toBe(0);
+    expect(
+      await prisma.webauthnChallenge.count({ where: { challenge: 'old' } }),
+    ).toBe(0);
     expect(await prisma.webauthnChallenge.count()).toBe(1);
   });
 
   async function registerPasskey(auth: FakeAuthenticator, name = 'Alice') {
     const webauthnUserId = randomBytes(32);
-    const options = await webauthn.registrationOptions({ webauthnUserId, name }, []);
+    const options = await webauthn.registrationOptions(
+      { webauthnUserId, name },
+      [],
+    );
     const response = auth.createCredential(options);
-    const passkey = await webauthn.verifyRegistration(response, options.challenge);
+    const passkey = await webauthn.verifyRegistration(
+      response,
+      options.challenge,
+    );
     return { passkey, webauthnUserId, options };
   }
 
@@ -108,8 +137,14 @@ describe('WebAuthn ceremonies', () => {
     const user = await prisma.user.create({
       data: { name: 'Alice', avatarUrl: '', webauthnUserId },
     });
-    const item = await prisma.$transaction((tx) => passkeys.insert(tx, user.id, passkey, 'Key 1'));
-    expect(item).toMatchObject({ id: passkey.id, name: 'Key 1', lastUsedAt: null });
+    const item = await prisma.$transaction((tx) =>
+      passkeys.insert(tx, user.id, passkey, 'Key 1'),
+    );
+    expect(item).toMatchObject({
+      id: passkey.id,
+      name: 'Key 1',
+      lastUsedAt: null,
+    });
     expect(item).not.toHaveProperty('publicKey');
 
     await prisma.$transaction(async (tx) => {
@@ -129,12 +164,16 @@ describe('WebAuthn ceremonies', () => {
     const options = await webauthn.authenticationOptions();
     expect(options.allowCredentials ?? []).toEqual([]);
     const response = auth.getAssertion(options);
-    const { newCounter } = await webauthn.verifyAuthentication(response, options.challenge, {
-      id: passkey.id,
-      publicKey: passkey.publicKey,
-      counter: passkey.counter,
-      transports: passkey.transports,
-    });
+    const { newCounter } = await webauthn.verifyAuthentication(
+      response,
+      options.challenge,
+      {
+        id: passkey.id,
+        publicKey: passkey.publicKey,
+        counter: passkey.counter,
+        transports: passkey.transports,
+      },
+    );
     expect(newCounter).toBeTypeOf('bigint');
     expect(newCounter > 0n).toBe(true);
   });
@@ -146,7 +185,9 @@ describe('WebAuthn ceremonies', () => {
       [],
     );
     const response = auth.createCredential(options, { uv: false });
-    await expectAuthFailed(webauthn.verifyRegistration(response, options.challenge));
+    await expectAuthFailed(
+      webauthn.verifyRegistration(response, options.challenge),
+    );
   });
 
   it('authentication with a wrong challenge throws auth_failed', async () => {
@@ -179,13 +220,21 @@ describe('WebAuthn ceremonies', () => {
     for (let round = 0; round < 5; round++) {
       await prisma.passkey.deleteMany();
       const results = await Promise.allSettled(
-        [1, 2].map(() => prisma.$transaction((tx) => passkeys.insert(tx, owner.id, passkey, 'k'))),
+        [1, 2].map(() =>
+          prisma.$transaction((tx) =>
+            passkeys.insert(tx, owner.id, passkey, 'k'),
+          ),
+        ),
       );
       const rejected = results.filter((r) => r.status === 'rejected');
       expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
       expect(rejected).toHaveLength(1);
-      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(AppError);
-      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject(authFailed);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+        AppError,
+      );
+      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject(
+        authFailed,
+      );
     }
   });
 });

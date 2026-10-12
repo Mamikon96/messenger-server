@@ -30,10 +30,15 @@ describe('AppExceptionFilter', () => {
   });
 
   it('logs unexpected errors with their stack, not the response body', () => {
-    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    const error = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
     const failure = new Error('boom');
     run(failure);
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('boom'), failure.stack);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('boom'),
+      failure.stack,
+    );
     error.mockRestore();
   });
 
@@ -52,13 +57,18 @@ describe('AppExceptionFilter', () => {
   it.each([
     [413, 'entity.too.large'],
     [400, 'entity.parse.failed'],
-  ])('maps body-parser error %i (%s) to its status with validation_failed', (status, type) => {
-    const { status: setStatus, json } = run(Object.assign(new Error('x'), { status, type }));
-    expect(setStatus).toHaveBeenCalledWith(status);
-    expect(json.mock.calls[0][0]).toEqual({
-      error: { code: 'validation_failed', message: 'validation_failed' },
-    });
-  });
+  ])(
+    'maps body-parser error %i (%s) to its status with validation_failed',
+    (status, type) => {
+      const { status: setStatus, json } = run(
+        Object.assign(new Error('x'), { status, type }),
+      );
+      expect(setStatus).toHaveBeenCalledWith(status);
+      expect(json.mock.calls[0][0]).toEqual({
+        error: { code: 'validation_failed', message: 'validation_failed' },
+      });
+    },
+  );
 
   it('ignores a non-numeric status field', () => {
     const { status } = run(Object.assign(new Error('x'), { status: '413' }));

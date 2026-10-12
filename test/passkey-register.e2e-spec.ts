@@ -20,10 +20,15 @@ describe('Passkey registration (e2e)', () => {
   let admin: TestLogin;
 
   const http = () => request(app.getHttpServer());
-  const pub = (path: string) => http().post(`/api${path}`).set('Origin', ORIGIN);
+  const pub = (path: string) =>
+    http().post(`/api${path}`).set('Origin', ORIGIN);
   const options = (token: string, name?: string) =>
     pub('/auth/passkey/register/options').send({ token, name });
-  const verify = (ceremony: string | undefined, body: object, extraCookie?: string) =>
+  const verify = (
+    ceremony: string | undefined,
+    body: object,
+    extraCookie?: string,
+  ) =>
     pub('/auth/passkey/register/verify')
       .set('Cookie', [ceremony, extraCookie].filter(Boolean) as string[])
       .send(body);
@@ -62,13 +67,22 @@ describe('Passkey registration (e2e)', () => {
       credential: auth.createCredential(opts),
       passkeyName: 'Laptop',
     }).expect(201);
-    expect(res.body.user).toEqual({ id: expect.any(String), name: 'Alice', avatarUrl: '' });
+    expect(res.body.user).toEqual({
+      id: expect.any(String),
+      name: 'Alice',
+      avatarUrl: '',
+    });
     expect(res.body.csrfToken).toEqual(expect.any(String));
     const sid = cookieFrom(res, 'sid')!;
     expect(sid).toBeDefined();
-    const session = await http().get('/api/auth/session').set('Cookie', sid).expect(200);
+    const session = await http()
+      .get('/api/auth/session')
+      .set('Cookie', sid)
+      .expect(200);
     expect(session.body.user.name).toBe('Alice');
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: res.body.user.id } });
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: res.body.user.id },
+    });
     expect(user.isAdmin).toBe(false);
     const keys = await prisma.passkey.findMany({ where: { userId: user.id } });
     expect(keys).toHaveLength(1);
@@ -138,7 +152,9 @@ describe('Passkey registration (e2e)', () => {
         name: 'taken',
       },
     });
-    const res = await verify(ceremony, { credential, passkeyName: 'k' }).expect(401);
+    const res = await verify(ceremony, { credential, passkeyName: 'k' }).expect(
+      401,
+    );
     expect(res.body.error.code).toBe('auth_failed');
     await inspectStatus(token).expect(200);
     expect(await prisma.user.count()).toBe(1);
@@ -148,7 +164,9 @@ describe('Passkey registration (e2e)', () => {
     const token = await issueInvite(app, admin);
     const { ceremony, opts } = await begin(token);
     const res = await verify(ceremony, {
-      credential: new FakeAuthenticator({ rpId: 'evil.example' }).createCredential(opts),
+      credential: new FakeAuthenticator({
+        rpId: 'evil.example',
+      }).createCredential(opts),
       passkeyName: 'k',
     }).expect(401);
     expect(res.body.error.code).toBe('auth_failed');
@@ -172,7 +190,9 @@ describe('Passkey registration (e2e)', () => {
     expect([ra.status, rb.status].sort((x, y) => x - y)).toEqual([201, 404]);
     const failed = ra.status === 404 ? ra : rb;
     expect(failed.body.error.code).toBe('invite_invalid');
-    expect(await prisma.user.count({ where: { id: { not: admin.userId } } })).toBe(1);
+    expect(
+      await prisma.user.count({ where: { id: { not: admin.userId } } }),
+    ).toBe(1);
     expect(await prisma.passkey.count()).toBe(1);
   });
 
@@ -201,10 +221,16 @@ describe('Passkey registration (e2e)', () => {
     const token = await issueInvite(app, admin);
     const { ceremony, opts } = await begin(token);
     const credential = new FakeAuthenticator().createCredential(opts);
-    const none = await verify(undefined, { credential, passkeyName: 'k' }).expect(401);
+    const none = await verify(undefined, {
+      credential,
+      passkeyName: 'k',
+    }).expect(401);
     expect(none.body.error.code).toBe('auth_failed');
     await verify(ceremony, { credential, passkeyName: 'k' }).expect(201);
-    const reused = await verify(ceremony, { credential, passkeyName: 'k' }).expect(401);
+    const reused = await verify(ceremony, {
+      credential,
+      passkeyName: 'k',
+    }).expect(401);
     expect(reused.body.error.code).toBe('auth_failed');
   });
 
@@ -256,18 +282,32 @@ describe('Passkey registration (e2e)', () => {
     const { ceremony, opts } = await begin(token);
     await verify(
       ceremony,
-      { credential: new FakeAuthenticator().createCredential(opts), passkeyName: 'k' },
+      {
+        credential: new FakeAuthenticator().createCredential(opts),
+        passkeyName: 'k',
+      },
       admin.cookie,
     ).expect(201);
-    await http().get('/api/auth/session').set('Cookie', admin.cookie).expect(401);
+    await http()
+      .get('/api/auth/session')
+      .set('Cookie', admin.cookie)
+      .expect(401);
   });
 
   it('recovery flow adds a second passkey, keeps the old one and kills all old sessions', async () => {
     const auth = new FakeAuthenticator();
     const joinToken = await issueInvite(app, admin);
-    const alice = await registerWithInvite(app, auth, `x#${joinToken}`, 'Alice');
+    const alice = await registerWithInvite(
+      app,
+      auth,
+      `x#${joinToken}`,
+      'Alice',
+    );
     const other = await loginAs(app, { name: 'Alice-second-session' });
-    await prisma.session.updateMany({ data: { userId: alice.userId }, where: { userId: other.userId } });
+    await prisma.session.updateMany({
+      data: { userId: alice.userId },
+      where: { userId: other.userId },
+    });
 
     const recovery = await http()
       .post('/api/admin/invites')
@@ -276,7 +316,10 @@ describe('Passkey registration (e2e)', () => {
       .send({ kind: 'recovery', userId: alice.userId })
       .expect(201);
     const newAuth = new FakeAuthenticator();
-    const opts = await options(tokenOf(recovery.body.url), 'ignored-name').expect(200);
+    const opts = await options(
+      tokenOf(recovery.body.url),
+      'ignored-name',
+    ).expect(200);
     expect(opts.body.user.name).toBe('Alice');
     expect(opts.body.excludeCredentials).toHaveLength(1);
     const res = await verify(cookieFrom(opts, 'wa_ceremony'), {
@@ -285,15 +328,25 @@ describe('Passkey registration (e2e)', () => {
     }).expect(201);
     expect(res.body.user.id).toBe(alice.userId);
     expect(res.body.user.name).toBe('Alice');
-    expect(await prisma.passkey.count({ where: { userId: alice.userId } })).toBe(2);
+    expect(
+      await prisma.passkey.count({ where: { userId: alice.userId } }),
+    ).toBe(2);
     expect(await prisma.user.count()).toBe(3); // admin, alice, extra
-    await http().get('/api/auth/session').set('Cookie', alice.cookie).expect(401);
-    await http().get('/api/auth/session').set('Cookie', other.cookie).expect(401);
+    await http()
+      .get('/api/auth/session')
+      .set('Cookie', alice.cookie)
+      .expect(401);
+    await http()
+      .get('/api/auth/session')
+      .set('Cookie', other.cookie)
+      .expect(401);
     await http()
       .get('/api/auth/session')
       .set('Cookie', cookieFrom(res, 'sid')!)
       .expect(200);
-    const invite = await prisma.invite.findUniqueOrThrow({ where: { id: recovery.body.id } });
+    const invite = await prisma.invite.findUniqueOrThrow({
+      where: { id: recovery.body.id },
+    });
     expect(invite.usedById).toBe(alice.userId);
   });
 
@@ -301,22 +354,32 @@ describe('Passkey registration (e2e)', () => {
     const victim = await loginAs(app, { name: 'Victim' });
     const invites = app.get(InvitesService);
     const issued = await invites.createRecovery(victim.userId, admin.userId);
-    await prisma.user.update({ where: { id: victim.userId }, data: { disabledAt: new Date() } });
+    await prisma.user.update({
+      where: { id: victim.userId },
+      data: { disabledAt: new Date() },
+    });
     const res = await options(tokenOf(issued.url)).expect(403);
     expect(res.body.error.code).toBe('user_disabled');
   });
 
   it('recovery: user disabled between options and verify → 403 user_disabled, invite stays unused', async () => {
     const victim = await loginAs(app, { name: 'Victim' });
-    const issued = await app.get(InvitesService).createRecovery(victim.userId, admin.userId);
+    const issued = await app
+      .get(InvitesService)
+      .createRecovery(victim.userId, admin.userId);
     const opts = await options(tokenOf(issued.url)).expect(200);
-    await prisma.user.update({ where: { id: victim.userId }, data: { disabledAt: new Date() } });
+    await prisma.user.update({
+      where: { id: victim.userId },
+      data: { disabledAt: new Date() },
+    });
     const res = await verify(cookieFrom(opts, 'wa_ceremony'), {
       credential: new FakeAuthenticator().createCredential(opts.body),
       passkeyName: 'k',
     }).expect(403);
     expect(res.body.error.code).toBe('user_disabled');
-    const invite = await prisma.invite.findUniqueOrThrow({ where: { id: issued.id } });
+    const invite = await prisma.invite.findUniqueOrThrow({
+      where: { id: issued.id },
+    });
     expect(invite.usedAt).toBeNull();
     expect(await prisma.passkey.count()).toBe(0);
   });
@@ -325,7 +388,9 @@ describe('Passkey registration (e2e)', () => {
     const issued = await app.get(InvitesService).createJoin(null, true);
     const auth = new FakeAuthenticator();
     const login = await registerWithInvite(app, auth, issued.url, 'Root');
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: login.userId } });
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: login.userId },
+    });
     expect(user.isAdmin).toBe(true);
   });
 });

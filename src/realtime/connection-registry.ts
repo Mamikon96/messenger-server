@@ -56,7 +56,8 @@ export class ConnectionRegistry {
   sendTo(userIds: string[], frame: WsFrame): void {
     const data = JSON.stringify(frame);
     for (const userId of new Set(userIds)) {
-      for (const { socket } of [...(this.byUser.get(userId) ?? [])]) this.deliver(socket, data);
+      for (const { socket } of [...(this.byUser.get(userId) ?? [])])
+        this.deliver(socket, data);
     }
   }
 
@@ -80,14 +81,17 @@ export class ConnectionRegistry {
   }
 
   closeAll(code: number, reason: string): void {
-    for (const { socket } of this.all()) this.safely(() => socket.close(code, reason));
+    for (const { socket } of this.all())
+      this.safely(() => socket.close(code, reason));
   }
 
   private safely(action: () => void): void {
     try {
       action();
     } catch (error) {
-      this.logger.warn(`websocket operation failed: ${(error as Error).message}`);
+      this.logger.warn(
+        `websocket operation failed: ${(error as Error).message}`,
+      );
     }
   }
 }

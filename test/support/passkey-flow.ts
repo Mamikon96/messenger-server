@@ -6,7 +6,10 @@ import type { FakeAuthenticator } from './fake-authenticator.js';
 export const ORIGIN = 'http://localhost:3000';
 
 /** Достаёт `name=value` из заголовков Set-Cookie ответа. */
-export function cookieFrom(res: request.Response, name: string): string | undefined {
+export function cookieFrom(
+  res: request.Response,
+  name: string,
+): string | undefined {
   const raw = res.headers['set-cookie'] as string[] | string | undefined;
   const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
   const found = list.find((c) => c.startsWith(`${name}=`));
@@ -18,7 +21,10 @@ export function cookieFrom(res: request.Response, name: string): string | undefi
 export const tokenOf = (url: string): string => url.split('#')[1]!;
 
 /** Администратор создаёт join-инвайт; возвращает токен из ссылки. */
-export async function issueInvite(app: INestApplication, admin: TestLogin): Promise<string> {
+export async function issueInvite(
+  app: INestApplication,
+  admin: TestLogin,
+): Promise<string> {
   const res = await request(app.getHttpServer())
     .post('/api/admin/invites')
     .set('Cookie', admin.cookie)

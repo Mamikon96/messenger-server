@@ -77,8 +77,12 @@ export class MePasskeysService {
   ): Promise<PasskeyItem> {
     this.assertFreshSession(session);
     const ceremony = await this.ceremonies.consume(ceremonyId, 'add_passkey');
-    if (ceremony.userId !== session.userId) throw new AppError(401, 'auth_failed');
-    const passkey = await this.webauthn.verifyRegistration(dto.credential, ceremony.challenge);
+    if (ceremony.userId !== session.userId)
+      throw new AppError(401, 'auth_failed');
+    const passkey = await this.webauthn.verifyRegistration(
+      dto.credential,
+      ceremony.challenge,
+    );
     return this.prisma.$transaction((tx) =>
       this.passkeys.insert(tx, session.userId, passkey, dto.passkeyName),
     );
@@ -93,7 +97,10 @@ export class MePasskeysService {
         select: ITEM_SELECT,
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
         throw new AppError(404, 'not_found');
       }
       throw error;
@@ -104,7 +111,10 @@ export class MePasskeysService {
   async remove(userId: string, id: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
-      const own = await tx.passkey.findFirst({ where: { id, userId }, select: { id: true } });
+      const own = await tx.passkey.findFirst({
+        where: { id, userId },
+        select: { id: true },
+      });
       if (!own) throw new AppError(404, 'not_found');
       const total = await tx.passkey.count({ where: { userId } });
       if (total <= 1) throw new AppError(409, 'last_passkey');

@@ -13,7 +13,11 @@ describe('Admin users (e2e)', () => {
 
   const http = () => request(app.getHttpServer());
   const patch = (as: TestLogin, id: string, body: object) =>
-    http().patch(`/api/admin/users/${id}`).set('Cookie', as.cookie).set('X-CSRF-Token', as.csrf).send(body);
+    http()
+      .patch(`/api/admin/users/${id}`)
+      .set('Cookie', as.cookie)
+      .set('X-CSRF-Token', as.csrf)
+      .send(body);
 
   beforeAll(async () => {
     const config = { ...new ConfigService().get(), wsHeartbeatMs: 100 };
@@ -42,9 +46,21 @@ describe('Admin users (e2e)', () => {
 
   it('lists disabled users too', async () => {
     await loginAs(app, { name: 'Bob', disabled: true });
-    const res = await http().get('/api/admin/users').set('Cookie', admin.cookie).expect(200);
-    expect(res.body.map((u: { name: string }) => u.name)).toEqual(['Admin', 'Bob']);
-    expect(Object.keys(res.body[0]).sort()).toEqual(['avatarUrl', 'disabledAt', 'id', 'isAdmin', 'name']);
+    const res = await http()
+      .get('/api/admin/users')
+      .set('Cookie', admin.cookie)
+      .expect(200);
+    expect(res.body.map((u: { name: string }) => u.name)).toEqual([
+      'Admin',
+      'Bob',
+    ]);
+    expect(Object.keys(res.body[0]).sort()).toEqual([
+      'avatarUrl',
+      'disabledAt',
+      'id',
+      'isAdmin',
+      'name',
+    ]);
     expect(res.body[0].disabledAt).toBeNull();
     expect(res.body[1].disabledAt).not.toBeNull();
   });
@@ -55,8 +71,13 @@ describe('Admin users (e2e)', () => {
     const res = await patch(admin, bob.userId, { disabled: true }).expect(200);
     expect(res.body.disabledAt).not.toBeNull();
     await http().get('/api/users').set('Cookie', bob.cookie).expect(401);
-    expect(await prisma.session.count({ where: { userId: bob.userId } })).toBe(0);
-    const users = await http().get('/api/users').set('Cookie', admin.cookie).expect(200);
+    expect(await prisma.session.count({ where: { userId: bob.userId } })).toBe(
+      0,
+    );
+    const users = await http()
+      .get('/api/users')
+      .set('Cookie', admin.cookie)
+      .expect(200);
     expect(users.body.map((u: { id: string }) => u.id)).toEqual([admin.userId]);
   });
 
@@ -64,8 +85,14 @@ describe('Admin users (e2e)', () => {
     const bob = await loginAs(app, { name: 'Bob', disabled: true });
     const res = await patch(admin, bob.userId, { disabled: false }).expect(200);
     expect(res.body.disabledAt).toBeNull();
-    const users = await http().get('/api/users').set('Cookie', admin.cookie).expect(200);
-    expect(users.body.map((u: { name: string }) => u.name)).toEqual(['Admin', 'Bob']);
+    const users = await http()
+      .get('/api/users')
+      .set('Cookie', admin.cookie)
+      .expect(200);
+    expect(users.body.map((u: { name: string }) => u.name)).toEqual([
+      'Admin',
+      'Bob',
+    ]);
   });
 
   it('promote to admin works (new admin passes AdminGuard)', async () => {
@@ -74,20 +101,32 @@ describe('Admin users (e2e)', () => {
     const res = await patch(admin, bob.userId, { isAdmin: true }).expect(200);
     expect(res.body.isAdmin).toBe(true);
     await http().get('/api/admin/users').set('Cookie', bob.cookie).expect(200);
-    const demoted = await patch(admin, bob.userId, { isAdmin: false }).expect(200);
+    const demoted = await patch(admin, bob.userId, { isAdmin: false }).expect(
+      200,
+    );
     expect(demoted.body.isAdmin).toBe(false);
   });
 
   it('admin cannot change himself → 403 forbidden', async () => {
-    const res = await patch(admin, admin.userId, { disabled: true }).expect(403);
+    const res = await patch(admin, admin.userId, { disabled: true }).expect(
+      403,
+    );
     expect(res.body.error.code).toBe('forbidden');
     await patch(admin, admin.userId, { isAdmin: false }).expect(403);
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: admin.userId } })).disabledAt).toBeNull();
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: admin.userId } }))
+        .disabledAt,
+    ).toBeNull();
   });
 
   it('empty body, unknown keys and non-boolean values → 400 validation_failed', async () => {
     const bob = await loginAs(app, { name: 'Bob' });
-    for (const body of [{}, { name: 'x' }, { disabled: 'yes' }, { isAdmin: true, extra: 1 }]) {
+    for (const body of [
+      {},
+      { name: 'x' },
+      { disabled: 'yes' },
+      { isAdmin: true, extra: 1 },
+    ]) {
       const res = await patch(admin, bob.userId, body).expect(400);
       expect(res.body.error.code).toBe('validation_failed');
     }
@@ -95,7 +134,9 @@ describe('Admin users (e2e)', () => {
   });
 
   it('unknown user → 404 not_found', async () => {
-    const res = await patch(admin, '00000000-0000-4000-8000-000000000000', { disabled: true }).expect(404);
+    const res = await patch(admin, '00000000-0000-4000-8000-000000000000', {
+      disabled: true,
+    }).expect(404);
     expect(res.body.error.code).toBe('not_found');
   });
 
@@ -111,14 +152,25 @@ describe('Admin users (e2e)', () => {
 
   it('recovery invite for unknown user → 404 not_found, for existing → kind recovery with userId', async () => {
     const create = (body: object) =>
-      http().post('/api/admin/invites').set('Cookie', admin.cookie).set('X-CSRF-Token', admin.csrf).send(body);
-    const missing = await create({ kind: 'recovery', userId: '00000000-0000-4000-8000-000000000000' }).expect(404);
+      http()
+        .post('/api/admin/invites')
+        .set('Cookie', admin.cookie)
+        .set('X-CSRF-Token', admin.csrf)
+        .send(body);
+    const missing = await create({
+      kind: 'recovery',
+      userId: '00000000-0000-4000-8000-000000000000',
+    }).expect(404);
     expect(missing.body.error.code).toBe('not_found');
     const bob = await loginAs(app, { name: 'Bob' });
-    const res = await create({ kind: 'recovery', userId: bob.userId }).expect(201);
+    const res = await create({ kind: 'recovery', userId: bob.userId }).expect(
+      201,
+    );
     expect(res.body.kind).toBe('recovery');
     expect(res.body.userId).toBe(bob.userId);
-    const row = await prisma.invite.findUniqueOrThrow({ where: { id: res.body.id } });
+    const row = await prisma.invite.findUniqueOrThrow({
+      where: { id: res.body.id },
+    });
     expect(row.makeAdmin).toBe(false);
     const inspected = await http()
       .post('/api/invites/inspect')

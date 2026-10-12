@@ -13,7 +13,10 @@ export class CsrfGuard implements CanActivate {
     const header = request.headers['x-csrf-token'];
     const provided = Buffer.from(typeof header === 'string' ? header : '');
     const expected = Buffer.from(request.session.csrfToken);
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    if (
+      provided.length !== expected.length ||
+      !timingSafeEqual(provided, expected)
+    ) {
       throw new AppError(403, 'csrf_invalid');
     }
     return true;

@@ -11,7 +11,9 @@ export class OriginGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    if (!isOriginAllowed(request.headers.origin, this.config.get().allowedOrigins)) {
+    if (
+      !isOriginAllowed(request.headers.origin, this.config.get().allowedOrigins)
+    ) {
       throw new AppError(403, 'forbidden');
     }
     return true;
