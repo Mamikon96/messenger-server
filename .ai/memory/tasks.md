@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-12 @ 07815df+dirty
+> Проверено: 2026-10-12 @ 9f1a070+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -18,7 +18,7 @@
   - Вне рамок: обобщение глобальных агентов и скилла `project-memory` в `~/.claude` (отдельно, затрагивает другие проекты); хвосты BE-07; изменения кода приложения, кроме форматирования.
   - Затрагивает: `.claude/`, `.ai/`, `scripts/`, `CLAUDE.md`, `docs/harness-audit-2026-10-12.md`; контракт API: нет; схема БД: нет.
   - Проверка: `bash scripts/check-memory.sh`, `npx vitest run scripts`; финал `bash scripts/accept.sh`. Ревью не требуется (процесс и конфиги, `acceptance.md`).
-  - Осталось: п.4 (`.claude/settings.json`, hooks с тестами); п.5 — маршрутизатор только в `CLAUDE.md`, ссылки на архив в правилах; п.7 — правка `CLAUDE.md`, `state.md`, `acceptance.md`, `memory-protocol.md`, `.ai/README.md`; закрыть BE-02 и BE-05; `accept.sh`, push, PR.
+  - Осталось: п.5 — маршрутизатор только в `CLAUDE.md`, ссылки на архив в правилах; п.7 — правка `CLAUDE.md`, `state.md`, `acceptance.md`, `memory-protocol.md`, `.ai/README.md`; закрыть BE-02 и BE-05; `accept.sh`, push, PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
