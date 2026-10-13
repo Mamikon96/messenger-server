@@ -5,6 +5,10 @@ import { runChecks } from './check-sync.mjs';
 
 const repo = resolve(import.meta.dirname, '..');
 const PARTS = ['src', 'prisma', 'docs', '.ai', 'test', 'scripts', '.env.example', 'CLAUDE.md'];
+const CONTRACT = ['Цель', 'Критерии приёмки', 'Вне рамок', 'Затрагивает', 'Проверка', 'Осталось'];
+const wipTask = (id) => `- **${id} (P3)** Задача.\n${CONTRACT.map((k) => `  - ${k}: x\n`).join('')}`;
+// Replaces the «В работе» section body so the test does not depend on the live task list.
+const inProgress = (tasks, body) => tasks.replace(/^## В работе\n[\s\S]*?(?=^## )/m, `## В работе\n${body}\n`);
 
 describe('check-sync', () => {
   let dir;
@@ -47,8 +51,8 @@ describe('check-sync', () => {
     ['a reference to a task that does not exist', '.ai/memory/state.md', (t) => `${t}\nСм. BE-999.\n`, /BE-999/],
     ['an unconditional Secure cookie claim', SPEC, (t) => t.replace('`HttpOnly; SameSite=Lax`', '`HttpOnly; Secure; SameSite=Lax`'), /Secure/],
     ['a default page size that differs from docs', 'src/messages/dto/list-messages.dto.ts', (t) => t.replace('DEFAULT_LIMIT = 50', 'DEFAULT_LIMIT = 51'), /messages\.limit\.default/],
-    ['a second task in progress', '.ai/memory/tasks.md', (t) => t.replace('## В работе\n', '## В работе\n- **BE-998 (P3)** Ещё одна задача.\n'), /WIP = 1/],
-    ['a task in progress without an out-of-scope item', '.ai/memory/tasks.md', (t) => t.replace(/^(\s+)- Вне рамок:/m, '$1- Вне:'), /Вне рамок/],
+    ['a second task in progress', '.ai/memory/tasks.md', (t) => inProgress(t, wipTask('BE-998') + wipTask('BE-999')), /WIP = 1/],
+    ['a task in progress without an out-of-scope item', '.ai/memory/tasks.md', (t) => inProgress(t, wipTask('BE-998').replace('- Вне рамок:', '- Вне:')), /Вне рамок/],
     ['a done section kept in tasks.md', '.ai/memory/tasks.md', (t) => `${t}\n## Сделано\n- 2026-01-01 — BE-01: тест.\n`, /секция «Сделано» живёт/],
     ['a task reference that exists nowhere once the archive entry is gone', '.ai/memory/tasks-archive.md', (t) => t.replaceAll('BE-01', 'BE-0'), /product-agreements\.md: ссылка на несуществующую задачу BE-01\b/],
     ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => `${t}\nСм. 8б.99.\n`, /8б\.99/],
