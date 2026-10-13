@@ -1,5 +1,5 @@
 # Архитектура backend
-> Проверено: 2026-10-08 @ cb5e2d4+dirty
+> Проверено: 2026-10-13 @ e4264bd+dirty
 
 Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/superpowers/specs/2026-10-05-core-contract-design.md`). Целевые слои и соглашения — `product-agreements.md`.
 
@@ -9,6 +9,7 @@
 - `common/` — `AppError`/`ErrorCode`, `AppExceptionFilter` (формат `{error:{code,message}}`), `ZodValidationPipe`, `OriginGuard` (публичные POST: `Origin` из `ALLOWED_ORIGINS`), `AuthRateLimitGuard` + `SlidingWindowLimiter` (бакет на IP, `AUTH_RATE_PER_MINUTE`, BE-D28).
 - `sessions/` — `SessionsService` (токен 32 байта, в БД sha256; `create(userId, tx?)`, `revokeAllForUser`; сессии отключённых не возвращаются), `SessionGuard`, `CsrfGuard`, `parseCookies`.
 - `auth/` — `AuthController` (`GET /api/auth/session`, `POST /api/auth/logout`), `AuthService` (тело сессии без `provider`), `cookie-options.ts`. Входа через OAuth нет (SH-D14).
+- `auth/password/` — чистые функции без Nest-провайдеров (BE-30, BE-D31): `password-hasher.ts` (`hashPassword`, `verifyPassword`, `verifyAgainstDummyHash`: потолок параметров PHC m≤65536, t≤10, p≤4; argon2id из `node:crypto`, PHC-строка, `timingSafeEqual`), `password-policy.ts` (`validatePassword`: `required`/`too_short`/`too_long`/`too_common`), `login.ts` (`normalizeLogin`), `common-passwords.ts` (блоклист xato-net-10-million-passwords-1000000 из SecLists, MIT, 46146 строк ≥ 12 байт; TS-модуль, чтобы попадал в `dist`). К маршрутам подключаются в BE-33.
 - `webauthn/` — `WebauthnService` (обёртка над `@simplewebauthn/server`, BE-D24: RP из `PUBLIC_URL`, `userVerification`/`residentKey` required, явные `expectedOrigin`/`expectedRPID`, ошибки → `401 auth_failed`), `CeremonyStore` (challenge в `webauthn_challenges`, TTL `CEREMONY_TTL_MS` 5 мин, погашение одним `DELETE … RETURNING`), `ceremony-cookie.ts` (cookie `wa_ceremony`, `Path=/api`), `PasskeyStore.insert` (единая вставка ключа, проверка занятости id до вставки).
 - `passkeys/` — `PasskeyAuthController` (`/api/auth/passkey/{register,login}/{options,verify}`, публичные: `OriginGuard` + `AuthRateLimitGuard`), `PasskeyAuthService` (вход под `FOR UPDATE` строки пользователя, регистрация и восстановление в транзакции с погашением инвайта), `MePasskeysController`/`MePasskeysService` (`/api/me/passkeys`, окно `REAUTH_WINDOW_MS` 10 мин на добавление, `last_passkey`), `dto/`.
 - `invites/` — `InvitesService` (токен 32 байта, в БД sha256; `findUsable`, `claim` — условный `updateMany`, `createJoin`/`createRecovery`, `listPending`, `revoke`), `InvitesController` (`POST /api/invites/inspect`, публичный), `AdminInvitesController` (`/api/admin/invites`), `invite-token.ts`. Ссылка `PUBLIC_URL/invite#<token>`.
