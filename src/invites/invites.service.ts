@@ -57,28 +57,6 @@ export class InvitesService {
     });
   }
 
-  /** Не использованные, не отозванные и не истёкшие; старые первыми. */
-  listPending(): Promise<InviteItem[]> {
-    return this.prisma.invite.findMany({
-      where: { usedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
-      select: itemSelect,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
-  }
-
-  async revoke(id: string): Promise<void> {
-    const { count } = await this.prisma.invite.updateMany({
-      where: {
-        id,
-        usedAt: null,
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      data: { revokedAt: new Date() },
-    });
-    if (count !== 1) throw new AppError(404, 'not_found');
-  }
-
   async findUsable(token: string): Promise<Invite> {
     const invite = await this.prisma.invite.findFirst({
       where: {

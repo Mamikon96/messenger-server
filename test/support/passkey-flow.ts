@@ -1,5 +1,9 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import {
+  type IssuedInvite,
+  InvitesService,
+} from '../../src/invites/invites.service.js';
 import type { TestLogin } from './db.js';
 import type { FakeAuthenticator } from './fake-authenticator.js';
 
@@ -20,18 +24,29 @@ export function cookieFrom(
 
 export const tokenOf = (url: string): string => url.split('#')[1]!;
 
-/** Администратор создаёт join-инвайт; возвращает токен из ссылки. */
+/** join-инвайт, выданный как админом (BE-32: HTTP-маршрутов выдачи нет, как у CLI — через сервис). */
+export function issueJoinInvite(
+  app: INestApplication,
+  admin: TestLogin,
+): Promise<IssuedInvite> {
+  return app.get(InvitesService).createJoin(admin.userId);
+}
+
+/** recovery-инвайт для существующего пользователя. */
+export function issueRecoveryInvite(
+  app: INestApplication,
+  admin: TestLogin,
+  userId: string,
+): Promise<IssuedInvite> {
+  return app.get(InvitesService).createRecovery(userId, admin.userId);
+}
+
+/** Выдаёт join-инвайт; возвращает токен из ссылки. */
 export async function issueInvite(
   app: INestApplication,
   admin: TestLogin,
 ): Promise<string> {
-  const res = await request(app.getHttpServer())
-    .post('/api/admin/invites')
-    .set('Cookie', admin.cookie)
-    .set('X-CSRF-Token', admin.csrf)
-    .send({})
-    .expect(201);
-  return tokenOf(res.body.url);
+  return tokenOf((await issueJoinInvite(app, admin)).url);
 }
 
 /** Полный сценарий регистрации по ссылке-инвайту (join или recovery). */
