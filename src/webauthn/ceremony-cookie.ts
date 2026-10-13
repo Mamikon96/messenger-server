@@ -5,7 +5,7 @@ import { CEREMONY_TTL_MS } from './ceremony-store.js';
 
 export const CEREMONY_COOKIE = 'wa_ceremony';
 
-// path /api: cookie читают и /api/auth/*, и /api/me/passkeys
+// path /api: cookie читают маршруты /api/auth/*
 const CEREMONY_COOKIE_PATH = '/api';
 
 export function setCeremonyCookie(

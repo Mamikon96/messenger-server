@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-14 @ 7a96943+dirty
+> Проверено: 2026-10-14 @ a21e85d+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -16,7 +16,7 @@
   - Вне рамок: схема БД и миграции, удаление ядра `src/passkeys/`, `src/webauthn/`, `src/invites/`, CLI `admin:invite` и `@simplewebauthn/server` (BE-33); вход по паролю; `logout-all` (BE-35).
   - Затрагивает: `src/passkeys/` (me-passkeys.controller.ts, me-passkeys.service.ts, dto/add-passkey.dto.ts, dto/rename-passkey.dto.ts), `src/invites/` (admin-invites.controller.ts, dto/create-invite.dto.ts, неиспользуемые методы `InvitesService`), `src/common/app-error.ts`, test/me-passkeys.e2e-spec.ts, `test/invites.e2e-spec.ts`, `test/admin-users.e2e-spec.ts`, `docs/client-integration.md`, core-спека, `.ai/memory/architecture.md`; контракт API: да (удаление маршрутов и кодов по спеке `docs/auth-password-spec.md`); схема БД: нет.
   - Проверка: сначала e2e на `404 not_found` удалённых маршрутов (красные до удаления); `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh` = 0 и APPROVE `nestjs-reviewer`.
-  - Осталось: ревью `nestjs-reviewer` → push и PR (код, e2e и доки готовы; accept зелёный).
+  - Осталось: повторное ревью `nestjs-reviewer` после правок (MAJOR и MINOR исправлены) → push и PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).

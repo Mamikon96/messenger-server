@@ -1,5 +1,5 @@
 # Состояние backend
-> Проверено: 2026-10-14 @ 7a96943+dirty
+> Проверено: 2026-10-14 @ a21e85d+dirty
 
 ## Общее
 NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Вход — passkeys (WebAuthn, `@simplewebauthn/server`) по одноразовым инвайтам и восстановление по ссылке — оба выпускает только CLI `npm run admin:invite`, админка пользователей (`users.disabled_at`) (BE-21, SH-D14, BE-D24–BE-D30; слито в `develop` 2026-10-12, PR #1). Маршруты «мои ключи» (`/api/me/passkeys*`) и админские инвайты (`/api/admin/invites*`) удалены в BE-32 (SH-D18). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
@@ -13,7 +13,7 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза
 1. Лимит сообщений (`src/messages/message-rate-limiter.ts`) хранится в памяти процесса: сбрасывается при рестарте, на несколько процессов не рассчитан (BE-D20). Лимит публичных эндпоинтов входа (`src/common/sliding-window-limiter.ts`, `AUTH_RATE_PER_MINUTE` по IP) — тоже в памяти; за прокси нужен `TRUST_PROXY=1` (BE-D28, BE-D30). `isAdmin` в теле сессии нет (BE-06).
 
 ## Последняя приёмка
-Автоприёмка (пишет scripts/accept.sh): код 0 · 2026-10-14 · unit 292/292 · e2e 222/222
+Автоприёмка (пишет scripts/accept.sh): код 0 · 2026-10-14 · unit 292/292 · e2e 221/221
 Ревью: BE-31 — nestjs-reviewer APPROVE (2 раунда)
 
 ## Зависимости от другой стороны
