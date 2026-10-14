@@ -1,5 +1,5 @@
 # Состояние backend
-> Проверено: 2026-10-14 @ 1e17917+dirty
+> Проверено: 2026-10-14 @ 7a96943+dirty
 
 ## Общее
 NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Вход — passkeys (WebAuthn, `@simplewebauthn/server`) по одноразовым инвайтам от админа, восстановление по ссылке от админа, «мои ключи», админка инвайтов и пользователей (`users.disabled_at`), первый админ — CLI `npm run admin:invite` (BE-21, SH-D14, BE-D24–BE-D30; слито в `develop` 2026-10-12, PR #1). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
