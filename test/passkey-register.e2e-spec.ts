@@ -10,6 +10,8 @@ import {
   ORIGIN,
   cookieFrom,
   issueInvite,
+  issueJoinInvite,
+  issueRecoveryInvite,
   registerWithInvite,
   tokenOf,
 } from './support/passkey-flow.js';
@@ -197,18 +199,12 @@ describe('Passkey registration (e2e)', () => {
   });
 
   it('invite revoked between options and verify → 404 invite_invalid', async () => {
-    const created = await http()
-      .post('/api/admin/invites')
-      .set('Cookie', admin.cookie)
-      .set('X-CSRF-Token', admin.csrf)
-      .send({})
-      .expect(201);
-    const { ceremony, opts } = await begin(tokenOf(created.body.url));
-    await http()
-      .delete(`/api/admin/invites/${created.body.id}`)
-      .set('Cookie', admin.cookie)
-      .set('X-CSRF-Token', admin.csrf)
-      .expect(204);
+    const created = await issueJoinInvite(app, admin);
+    const { ceremony, opts } = await begin(tokenOf(created.url));
+    await prisma.invite.update({
+      where: { id: created.id },
+      data: { revokedAt: new Date() },
+    });
     const res = await verify(ceremony, {
       credential: new FakeAuthenticator().createCredential(opts),
       passkeyName: 'k',
@@ -309,17 +305,11 @@ describe('Passkey registration (e2e)', () => {
       where: { userId: other.userId },
     });
 
-    const recovery = await http()
-      .post('/api/admin/invites')
-      .set('Cookie', admin.cookie)
-      .set('X-CSRF-Token', admin.csrf)
-      .send({ kind: 'recovery', userId: alice.userId })
-      .expect(201);
+    const recovery = await issueRecoveryInvite(app, admin, alice.userId);
     const newAuth = new FakeAuthenticator();
-    const opts = await options(
-      tokenOf(recovery.body.url),
-      'ignored-name',
-    ).expect(200);
+    const opts = await options(tokenOf(recovery.url), 'ignored-name').expect(
+      200,
+    );
     expect(opts.body.user.name).toBe('Alice');
     expect(opts.body.excludeCredentials).toHaveLength(1);
     const res = await verify(cookieFrom(opts, 'wa_ceremony'), {
@@ -345,7 +335,7 @@ describe('Passkey registration (e2e)', () => {
       .set('Cookie', cookieFrom(res, 'sid')!)
       .expect(200);
     const invite = await prisma.invite.findUniqueOrThrow({
-      where: { id: recovery.body.id },
+      where: { id: recovery.id },
     });
     expect(invite.usedById).toBe(alice.userId);
   });

@@ -11,8 +11,6 @@ export type ErrorCode =
   | 'invite_invalid'
   | 'auth_failed'
   | 'user_disabled'
-  | 'reauth_required'
-  | 'last_passkey'
   | 'not_found'
   | 'internal_error';
 

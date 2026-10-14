@@ -6,7 +6,7 @@
 ## Цель и ограничения
 - Реальный мессенджер для малой закрытой группы: до ~1 000 пользователей, один сервер, TLS, без E2EE (SH-D06).
 - Стек: Node.js, NestJS 12, PostgreSQL, Prisma (BE-D05), `ws` через `@nestjs/platform-ws` (BE-D06), Vitest + supertest (BE-D04), npm (BE-D03).
-- Вход по passkeys (WebAuthn), OAuth нет (SH-D14, BE-D24). Новые участники попадают в группу только по одноразовой инвайт-ссылке от админа (BE-D25); тело `GET /auth/session` без `isAdmin` и `provider` (SH-D12). Чаты 1:1 и группы, роли в группе `owner`/`member` (SH-D11).
+- Вход по passkeys (WebAuthn), OAuth нет (SH-D14, BE-D24). Новые участники попадают в группу только по одноразовой инвайт-ссылке, выпущенной админом сервера через CLI (BE-D25, BE-D26); тело `GET /auth/session` без `isAdmin` и `provider` (SH-D12). Чаты 1:1 и группы, роли в группе `owner`/`member` (SH-D11).
 
 ## 1. Схема PostgreSQL
 
@@ -28,7 +28,6 @@
 - Первый админ и восстановление потерянного админа — CLI на сервере `npm run admin:invite` (BE-D26): выпускает одноразовую ссылку (с правами админа или восстановления); `make_admin` выставляет только CLI, админ через REST его не задаёт.
 - Инвайт (BE-D25): токен — 32 случайных байта (base64url, 43 символа), в БД только sha256; ссылка `PUBLIC_URL/invite#<token>` (токен во фрагменте, клиент читает его и передаёт в теле POST); срок `INVITE_TTL_HOURS` (по умолчанию 72); одноразовый; отзыв — `revoked_at`. Погашение — условный `UPDATE` (не использован, не отозван, не истёк) в одной транзакции с созданием пользователя и passkey.
 - Восстановление (`kind = "recovery"`): ссылка привязана к существующему пользователю; при погашении добавляется новый passkey, все сессии пользователя удаляются, старые passkeys остаются. Для отключённого пользователя ссылка отвергается (`403 user_disabled`).
-- Добавить passkey из активной сессии можно, только если сессия не старше 10 минут (`REAUTH_WINDOW_MS`), иначе `403 reauth_required` (BE-D25).
 - Отключение (BE-D27): `users.disabled_at`; отключённый скрыт из `GET /users`, с ним нельзя создать чат и добавить в группу (`404 not_found`), войти он не может (`403 user_disabled`), все его сессии удаляются в момент отключения. Существующие чаты и история остаются (BE-D16). Вход, восстановление и отключение берут блокировку строки пользователя (`FOR UPDATE`), чтобы исключить гонку «отключение ↔ вход».
 - Удаление пользователей и сообщений вне объёма.
 
@@ -48,11 +47,6 @@
 | `POST /auth/passkey/login/verify` | Публично: `{credential}` (`AuthenticationResponseJSON`, `response.userHandle` обязателен). Создаёт сессию; ответ как у `GET /auth/session` | 200, 400, 401 `auth_failed`, 403 `user_disabled`, 429 |
 | `GET /auth/session` | `{user: {id, name, avatarUrl}, csrfToken}` — без `provider` и `isAdmin` | 200, 401 |
 | `POST /auth/logout` | Выход | 204, 401, 403 |
-| `GET /me/passkeys` | Мои ключи `[{id, name, deviceType, backedUp, createdAt, lastUsedAt}]` по возрастанию `createdAt` | 200, 401 |
-| `POST /me/passkeys/options` | Параметры создания ещё одного ключа (`excludeCredentials` — уже имеющиеся); cookie `wa_ceremony`; только сессия не старше 10 минут | 200, 401, 403 `reauth_required` |
-| `POST /me/passkeys/verify` | `{credential, passkeyName}` → созданный ключ; снова проверяется возраст сессии | 201, 400, 401 `auth_failed`, 403 `reauth_required` |
-| `PATCH /me/passkeys/:id` | `{name}` (1..64) → ключ | 200, 400, 404 |
-| `DELETE /me/passkeys/:id` | Удалить свой ключ; единственный — `409 last_passkey` | 204, 404, 409 |
 
 Cookie церемонии `wa_ceremony`: `HttpOnly; SameSite=Lax; Path=/api`, `Max-Age` 5 минут (`CEREMONY_TTL_MS`), `Secure` только при https; значение — id строки в `webauthn_challenges`. Церемония одноразовая: любой `verify` погашает её и очищает cookie; повтор, просрочка, чужой `purpose` — `401 auth_failed`. Параметры WebAuthn (BE-D24): `userVerification: 'required'`, `residentKey: 'required'`, `attestation: 'none'`, RP ID — hostname `PUBLIC_URL`, ожидаемый origin — origin `PUBLIC_URL`. При успешном входе или регистрации прежняя cookie-сессия уничтожается. Неудачная церемония — `401 auth_failed` (сессия клиента жива); потеря сессии — `401 unauthorized` (BE-D30).
 
@@ -69,9 +63,6 @@ Cookie церемонии `wa_ceremony`: `HttpOnly; SameSite=Lax; Path=/api`, `M
 | `GET /chats/:id/messages` | `?before=<seq>` (история) или `?since=<seq>` (догонка), `limit` 1..100 (по умолчанию 50, для обоих режимов); курсоры исключающие, оба сразу — `400`; без курсора — последняя страница. Ответ — `{messages, hasMore}`: `messages` — `ChatMessageDto` (форма `message.new`) по возрастанию `seq`, `hasMore` — есть ли ещё сообщения в направлении запроса (BE-D20, BE-D23) | 200, 400, 404 |
 | `POST /chats/:id/messages` | `{clientId (uuid), body}`; `body` — до 4 000 кодовых точек, после `trim` не пусто, без `\u0000`; хранится без изменений. Ответ — `ChatMessageDto`: `201` новое, `200` повтор с тем же `clientId` (даже с другим `body`: возвращается исходное, события нет). Порядок проверок: валидация → членство (`404`) → повтор → лимит (`429`, заголовок `Retry-After`; повторы лимит не занимают) | 201 / 200, 400, 404, 429 |
 | `POST /chats/:id/read` | `{seq}`; `last_read_seq` двигается только вперёд (меньший `seq` — `204` без изменений); `seq` больше `last_seq` чата — `400` | 204, 400, 404 |
-| `POST /admin/invites` | Только админ. Пустое тело или `{kind:"join"}` — приглашение на вступление; `{kind:"recovery", userId}` — ссылка восстановления (`404`, если пользователя нет). Ответ `{id, kind, userId, createdAt, expiresAt, url}`: `url` (`PUBLIC_URL/invite#<token>`) виден только в этом ответе | 201, 400, 403, 404 |
-| `GET /admin/invites` | Не использованные, не отозванные и не истёкшие инвайты `[{id, kind, userId, createdAt, expiresAt}]`, без токена | 200, 403 |
-| `DELETE /admin/invites/:id` | Отозвать неиспользованный инвайт | 204, 403, 404 |
 | `GET /admin/users` | Все пользователи, включая отключённых: `[{id, name, avatarUrl, isAdmin, disabledAt}]` по `name` | 200, 403 |
 | `PATCH /admin/users/:id` | `{isAdmin?, disabled?}` (хотя бы одно поле); изменить себя нельзя (`403 forbidden`); отключение удаляет сессии пользователя | 200, 400, 403, 404 |
 
@@ -104,7 +95,7 @@ Cookie церемонии `wa_ceremony`: `HttpOnly; SameSite=Lax; Path=/api`, `M
 
 ## 4. Ошибки, лимиты, транзакции, тесты
 
-- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `forbidden`, `unauthorized`, `invite_invalid`, `auth_failed`, `user_disabled`, `reauth_required`, `last_passkey`, `not_found`, `internal_error`, `unsupported_type`; `auth_error` в редиректе больше не существует. Статусы: `invite_invalid` 404, `auth_failed` 401, `user_disabled` 403, `reauth_required` 403, `last_passkey` 409. Тело запроса больше ~100 КБ (лимит body-parser) — `413` с кодом `validation_failed` (BE-D22).
+- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `forbidden`, `unauthorized`, `invite_invalid`, `auth_failed`, `user_disabled`, `not_found`, `internal_error`, `unsupported_type`; `auth_error` в редиректе больше не существует. Статусы: `invite_invalid` 404, `auth_failed` 401, `user_disabled` 403 403 409. Тело запроса больше ~100 КБ (лимит body-parser) — `413` с кодом `validation_failed` (BE-D22).
 - Стартовые лимиты (в конфигурации): сообщение до 4 000 символов; до 30 сообщений в минуту на пользователя (`429`); до 100 участников в группе (`MAX_GROUP_MEMBERS`, по умолчанию 100; превышение — `400 validation_failed`).
 - Валидация входов DTO-схемами на границе контроллера. Тело сообщения хранится и отдаётся как текст; санитизацию ссылок делает клиент.
 - Отправка сообщения: одна транзакция — `UPDATE chats SET last_seq = last_seq + 1 ... RETURNING` и `INSERT` в `messages`. Повтор с тем же `clientId` находится запросом под блокировкой чата до вставки и возвращает существующее сообщение (уникальный индекс — страховка, P2002 внутри транзакции PostgreSQL обработать нельзя). Для атомарного `seq` и курсорных запросов допускается raw SQL через Prisma.
