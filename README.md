@@ -1,6 +1,6 @@
 # messenger-server
 
-Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей): NestJS, PostgreSQL, WebSocket. Вход и регистрация по логину и паролю появятся в BE-44 (спека `docs/auth-password-spec.md`); passkeys и инвайты удалены в BE-33, сейчас входа нет. Клиент — отдельный репозиторий `messenger-client-react`. Контракт API — `docs/client-integration.md`.
+Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей): NestJS, PostgreSQL, WebSocket. Вход и регистрация по логину и паролю (`POST /api/auth/login`, `POST /api/auth/register`, BE-44; спека `docs/auth-password-spec.md`); passkeys и инвайты удалены в BE-33. Клиент — отдельный репозиторий `messenger-client-react`. Контракт API — `docs/client-integration.md`.
 
 ## Локальный запуск
 
@@ -16,7 +16,7 @@ npm run start:dev
 
 ## Первый администратор
 
-Назначение администратора — CLI `npm run admin:promote <login>` (BE-34, ещё не реализован). Пользователей до BE-44 создать нечем; после BE-44 и до BE-34 администратора можно назначить только в БД (`UPDATE users SET is_admin = true WHERE id = …`).
+Назначение администратора — CLI `npm run admin:promote <login>` (BE-34, ещё не реализован). Пользователей создаёт регистрация (BE-44); до BE-34 администратора можно назначить только в БД (`UPDATE users SET is_admin = true WHERE id = …`).
 
 ## За reverse proxy
 

@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { Test } from '@nestjs/testing';
-import { resetDb } from './support/db.js';
+import { TEST_PASSWORD_HASH, createUserRow, resetDb } from './support/db.js';
 import { PrismaModule } from '../src/prisma/prisma.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
@@ -26,9 +27,97 @@ describe('DB schema (e2e)', () => {
 
   let counter = 0;
   const newUser = (name = `user-${++counter}`) =>
-    prisma.user.create({
-      data: { name, avatarUrl: '' },
+    createUserRow(prisma, { name });
+
+  const insertUser = (
+    login: string,
+    firstName = 'First',
+    lastName = 'Last',
+    name = `${firstName} ${lastName}`.trim(),
+  ) =>
+    prisma.$executeRaw`
+      INSERT INTO users (id, login, password_hash, first_name, last_name, name, avatar_url)
+      VALUES (gen_random_uuid(), ${login}, ${TEST_PASSWORD_HASH}, ${firstName}, ${lastName}, ${name}, '')`;
+
+  describe('users login and name columns (BE-44)', () => {
+    it.each([
+      ['uppercase', 'Alice'],
+      ['e with acute', 'caf\u00e9-user'],
+      ['yo', '\u0451\u0436\u0438\u043a1'],
+      ['sharp s', 'stra\u00dfe'],
+      ['too short', 'ab'],
+      ['too long', 'a'.repeat(33)],
+      ['space', 'al ice'],
+      ['at sign', 'al@ice'],
+      ['empty', ''],
+    ])(
+      'rejects a login that violates users_login_format: %s',
+      async (_n, login) => {
+        await expect(insertUser(login)).rejects.toThrow(/users_login_format/);
+      },
+    );
+
+    it('accepts boundary logins', async () => {
+      await expect(insertUser('a.b_c-d9')).resolves.toBe(1);
+      await expect(insertUser('abc')).resolves.toBe(1);
+      await expect(insertUser('a'.repeat(32))).resolves.toBe(1);
     });
+
+    it('rejects a duplicate login', async () => {
+      await insertUser('alice');
+      await expect(insertUser('alice')).rejects.toThrow(
+        /users_login_key|unique/i,
+      );
+    });
+
+    it("rejects name that differs from btrim(first_name || ' ' || last_name)", async () => {
+      await expect(
+        insertUser('alice', 'First', 'Last', 'Other'),
+      ).rejects.toThrow(/users_name_matches_parts/);
+      await expect(insertUser('bob', 'First', '', 'First ')).rejects.toThrow(
+        /users_name_matches_parts/,
+      );
+    });
+
+    it('accepts name equal to the trimmed parts and defaults last_name to empty', async () => {
+      await expect(insertUser('alice', 'First', 'Last')).resolves.toBe(1);
+      await expect(insertUser('bob', 'Solo', '')).resolves.toBe(1);
+      await prisma.$executeRaw`
+        INSERT INTO users (id, login, password_hash, first_name, name, avatar_url)
+        VALUES (gen_random_uuid(), 'carol', ${TEST_PASSWORD_HASH}, 'Carol', 'Carol', '')`;
+      const rows = await prisma.$queryRaw<{ last_name: string }[]>`
+        SELECT last_name FROM users WHERE login = 'carol'`;
+      expect(rows).toEqual([{ last_name: '' }]);
+    });
+
+    describe('migration guard', () => {
+      const guardSql = (): string => {
+        const sql = readFileSync(
+          new URL(
+            '../prisma/migrations/20261015120000_password_login/migration.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        );
+        const guard = /DO \$\$[\s\S]*?END \$\$;/.exec(sql);
+        if (!guard) throw new Error('guard DO block not found in migration');
+        return guard[0];
+      };
+
+      it('passes on an empty users table', async () => {
+        await expect(
+          prisma.$executeRawUnsafe(guardSql()),
+        ).resolves.toBeDefined();
+      });
+
+      it('raises with a prisma migrate reset hint when users is not empty', async () => {
+        await newUser();
+        await expect(prisma.$executeRawUnsafe(guardSql())).rejects.toThrow(
+          /prisma migrate reset/,
+        );
+      });
+    });
+  });
 
   it('has no passkey, WebAuthn challenge and invite storage (BE-33)', async () => {
     const tables = await prisma.$queryRaw<{ table_name: string }[]>`

@@ -12,7 +12,7 @@
 
 | Таблица | Поля | Ограничения |
 |---|---|---|
-| `users` | `id` uuid, `name`, `avatar_url`, `is_admin`, `disabled_at` (null — активен), `created_at` | email не хранится; `avatar_url` новых пользователей — пустая строка; колонки входа по паролю — BE-44 (спека `docs/auth-password-spec.md` §9) |
+| `users` | `id` uuid, `login`, `password_hash`, `first_name`, `last_name`, `name`, `avatar_url`, `is_admin`, `disabled_at` (null — активен), `created_at` | email не хранится; `avatar_url` новых пользователей — пустая строка; `login` уникален, CHECK `users_login_format` (нижний регистр, `[a-z0-9._-]{3,32}`); `password_hash` — argon2id в PHC; `last_name` по умолчанию `''`; `name` — производное `btrim(first_name \|\| ' ' \|\| last_name)`, пишет код, CHECK `users_name_matches_parts` (BE-44, BE-D38) |
 | `sessions` | `id` (хэш токена cookie), `user_id`, `csrf_token`, `created_at`, `expires_at` | срок 7 дней, абсолютный; cookie хранит только непрозрачный токен |
 | `chats` | `id`, `type` (`direct`/`group`), `title` (null для 1:1), `direct_key` (null для групп), `created_by`, `last_seq`, `created_at` | уникально `direct_key` (отсортированная пара id); `last_seq` растёт атомарно; CHECK `chats_type_shape`: `direct` ⇔ `direct_key` задан и `title` null, `group` ⇔ `direct_key` null и `title` задан |
 | `chat_members` | (`chat_id`, `user_id`), `role` (`owner`/`member`), `last_read_seq`, `joined_at` | в группе всегда есть хотя бы один `owner` |
@@ -30,11 +30,13 @@
 Все пути под `/api`, тела JSON. Изменяющие запросы (`POST`, `PUT`, `PATCH`, `DELETE`) требуют заголовок `X-CSRF-Token`. Сессия по cookie `HttpOnly; SameSite=Lax`; флаг `Secure` ставится, только если `PUBLIC_URL` начинается с `https://` (в dev по http его нет).
 
 ### Auth
-Вход и регистрация по паролю — BE-44 (до неё входа нет, BE-D38); все пути под `/api`. Публичные `POST` (без сессии) требуют заголовок `Origin` из `ALLOWED_ORIGINS` (иначе `403 forbidden`) и ограничены одним бакетом на IP: `AUTH_RATE_PER_MINUTE` (по умолчанию 20) за 60 с, сверх — `429 rate_limited` с `Retry-After` (BE-D28). `TRUST_PROXY` (по умолчанию 0) задаёт число доверенных прокси для определения IP.
+Вход и регистрация по паролю (BE-44, BE-D38); все пути под `/api`. Публичные `POST` (без сессии) требуют заголовок `Origin` из `ALLOWED_ORIGINS` (иначе `403 forbidden`) и ограничены одним бакетом на IP: `AUTH_RATE_PER_MINUTE` (по умолчанию 20) за 60 с, сверх — `429 rate_limited` с `Retry-After` (BE-D28). `TRUST_PROXY` (по умолчанию 0) задаёт число доверенных прокси для определения IP.
 
 | Метод и путь | Назначение | Ответы |
 |---|---|---|
-| `GET /auth/session` | `{user: {id, name, avatarUrl}, csrfToken}` — без `provider` и `isAdmin` | 200, 401 |
+| `POST /auth/register` | `{login, password}` → `201` `{user: SessionUser, csrfToken}` + cookie `sid`; `login` нормализуется (trim, нижний регистр) и проверяется по `[a-z0-9._-]{3,32}`, пароль 12..256 байт и не из списка частых; имя генерирует сервер; занятый логин (после нормализации) — `409 login_taken` до хэширования | 201, 400, 403, 409, 429 |
+| `POST /auth/login` | `{login, password}` → `200` `{user: SessionUser, csrfToken}` + cookie `sid`; неверный логин или пароль — `401 auth_failed` (одинаково, фиктивный хэш против тайминга); отключённый после верного пароля — `403 user_disabled`; формат логина и политика пароля не проверяются | 200, 400, 401, 403, 429 |
+| `GET /auth/session` | `{user: {id, login, firstName, lastName, name, avatarUrl}, csrfToken}` — без `provider`, `isAdmin` и `password_hash` | 200, 401 |
 | `POST /auth/logout` | Выход | 204, 401, 403 |
 
 При успешном входе или регистрации прежняя cookie-сессия уничтожается. Неудачный вход — `401 auth_failed` (сессия клиента жива); потеря сессии — `401 unauthorized` (BE-D30).
@@ -84,7 +86,7 @@
 
 ## 4. Ошибки, лимиты, транзакции, тесты
 
-- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `forbidden`, `unauthorized`, `auth_failed`, `user_disabled`, `not_found`, `internal_error`, `unsupported_type`; `auth_error` в редиректе больше не существует. Статусы: `auth_failed` 401, `user_disabled` 403 403 409. Тело запроса больше ~100 КБ (лимит body-parser) — `413` с кодом `validation_failed` (BE-D22).
+- Формат ошибки REST: `{ "error": { "code": "<slug>", "message": "..." } }`. WebSocket: кадр `{ "type": "error", "payload": { "code": "<slug>", "message": "..." } }` (BE-D16). Коды стабильны, тексты не часть контракта. Коды `error.code`: `validation_failed`, `already_member`, `rate_limited`, `csrf_invalid`, `forbidden`, `unauthorized`, `auth_failed`, `user_disabled`, `login_taken`, `not_found`, `internal_error`, `unsupported_type`; `auth_error` в редиректе больше не существует. Статусы: `auth_failed` 401, `user_disabled` 403, `login_taken` 409. Тело запроса больше ~100 КБ (лимит body-parser) — `413` с кодом `validation_failed` (BE-D22).
 - Стартовые лимиты (в конфигурации): сообщение до 4 000 символов; до 30 сообщений в минуту на пользователя (`429`); до 100 участников в группе (`MAX_GROUP_MEMBERS`, по умолчанию 100; превышение — `400 validation_failed`).
 - Валидация входов DTO-схемами на границе контроллера. Тело сообщения хранится и отдаётся как текст; санитизацию ссылок делает клиент.
 - Отправка сообщения: одна транзакция — `UPDATE chats SET last_seq = last_seq + 1 ... RETURNING` и `INSERT` в `messages`. Повтор с тем же `clientId` находится запросом под блокировкой чата до вставки и возвращает существующее сообщение (уникальный индекс — страховка, P2002 внутри транзакции PostgreSQL обработать нельзя). Для атомарного `seq` и курсорных запросов допускается raw SQL через Prisma.

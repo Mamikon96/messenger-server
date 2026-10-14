@@ -1,5 +1,5 @@
 # Архитектура backend
-> Проверено: 2026-10-13 @ e4264bd+dirty
+> Проверено: 2026-10-14 @ fe74e73+dirty
 
 Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/superpowers/specs/2026-10-05-core-contract-design.md`). Целевые слои и соглашения — `product-agreements.md`.
 
@@ -8,7 +8,7 @@
 - `prisma/` — глобальный `PrismaService` (Prisma 7 + `@prisma/adapter-pg`); клиент генерируется в `src/generated/` (не в git, `npm run db:generate`).
 - `common/` — `AppError`/`ErrorCode`, `AppExceptionFilter` (формат `{error:{code,message}}`), `ZodValidationPipe`, `OriginGuard` (публичные POST: `Origin` из `ALLOWED_ORIGINS`), `AuthRateLimitGuard` + `SlidingWindowLimiter` (бакет на IP, `AUTH_RATE_PER_MINUTE`, BE-D28).
 - `sessions/` — `SessionsService` (токен 32 байта, в БД sha256; `create(userId, tx?)`, `revokeAllForUser`; сессии отключённых не возвращаются), `SessionGuard`, `CsrfGuard`, `parseCookies`.
-- `auth/` — `AuthController` (`GET /api/auth/session`, `POST /api/auth/logout`), `AuthService` (тело сессии без `provider`), `cookie-options.ts`. Входа через OAuth и passkeys нет (SH-D14, BE-D38); вход и регистрация по паролю — BE-44.
+- `auth/` — `AuthController` (`POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/session`, `POST /api/auth/logout`), `AuthService` (регистрация и вход, BE-44), `dto/credentials.dto.ts` (zod-схемы тел), `session-user.ts` (`SESSION_USER_SELECT`, `toSessionUser`, `SessionUser`), `session-cookie.ts` (cookie `sid`: чтение, установка, очистка), `user-lock.ts` (`lockUserRow`: `FOR UPDATE` строки пользователя, общая точка с отключением админом; для BE-39), `cookie-options.ts`. `AuthModule` импортирует `CommonModule` (guards входа). OAuth и passkeys нет (SH-D14, BE-D38).
 - `auth/password/` — чистые функции без Nest-провайдеров (BE-30, BE-D31): `password-hasher.ts` (`hashPassword`, `verifyPassword`, `verifyAgainstDummyHash`: потолок параметров PHC m≤65536, t≤10, p≤4; argon2id из `node:crypto`, PHC-строка, `timingSafeEqual`), `password-policy.ts` (`validatePassword`: `required`/`too_short`/`too_long`/`too_common`), `login.ts` (`normalizeLogin`), `common-passwords.ts` (блоклист xato-net-10-million-passwords-1000000 из SecLists, MIT, 46146 строк ≥ 12 байт; TS-модуль, чтобы попадал в `dist`). К маршрутам подключаются в BE-44.
 - `admin/` — `AdminGuard`, `AdminUsersController`/`AdminUsersService` (`GET /api/admin/users`, `PATCH /api/admin/users/:id`: `isAdmin`, `disabled`; отключение под `FOR UPDATE` и `SessionsService.revokeAllForUser`; изменить себя нельзя).
 - `users/` — `GET /api/users` (активные пользователи, `activeUserWhere`).
@@ -18,17 +18,20 @@
 - `app.setup.ts` — `configureApp` (префикс `/api`, фильтр ошибок, `SessionWsAdapter`), общий для `main.ts` и тестов.
 
 ## Эндпоинты (все под `/api`)
-- Auth: `GET /auth/session`, `POST /auth/logout`; публичных маршрутов входа до BE-44 нет (passkeys и инвайты удалены в BE-33).
+- Auth: `POST /auth/register`, `POST /auth/login` (публичные: `OriginGuard` + `AuthRateLimitGuard`), `GET /auth/session`, `POST /auth/logout`.
 - Сообщения (фаза 3): `POST /chats/:id/messages`, `GET /chats/:id/messages` (`before`/`since`/`limit`), `POST /chats/:id/read`.
 - Чаты (фаза 2): `GET /chats`, `POST /chats`, `GET /chats/:id`, `PATCH /chats/:id`, `POST /chats/:id/members`, `DELETE /chats/:id/members/:userId`. Формы и коды — §2 спеки.
 - `GET /users`; админ: `GET /admin/users`, `PATCH /admin/users/:id`.
 - WebSocket: `GET /ws` (без префикса `/api`).
 
 ## Поток входа
-Вход по passkeys и инвайты удалены (BE-33, BE-D38); до BE-44 входа нет, тестовые сессии создаёт `loginAs`. Общая часть будущего входа: публичные POST проходят `OriginGuard` и `AuthRateLimitGuard` (`src/common/`), `TRUST_PROXY` задаёт `trust proxy`; вход и отключение берут `FOR UPDATE` строки пользователя.
+Публичные POST (`register`, `login`) проходят `OriginGuard` и `AuthRateLimitGuard` (`src/common/`, один бакет на IP), `TRUST_PROXY` задаёт `trust proxy`.
+- `register`: нормализация логина и политика пароля (zod-схема, `auth/password/`) → проверка занятости логина **до** хэширования (`409 login_taken` без argon2) → `hashPassword` вне транзакции → транзакция: создание пользователя (имя из `users/name-generator.ts`, `name` = `composeName`), удаление прежней сессии, создание новой. P2002 уникального индекса (гонка) ловится снаружи `$transaction` → `409 login_taken`.
+- `login`: `SELECT` по нормализованному логину вне транзакции → argon2 против хэша пользователя или фиктивного (`verifyAgainstDummyHash`; логин не по формату §4.1 — сразу фиктивный) → транзакция: `lockUserRow` (`FOR UPDATE`); `password_hash` изменился с момента проверки → `401 auth_failed`, `disabled_at` → `403 user_disabled`; затем удаление прежней сессии и создание новой. При любой неудаче прежняя сессия жива. Отключение админом берёт ту же блокировку (`AdminUsersService.update`).
+- `GET /auth/session`: `SessionGuard` уже нашёл сессию; сервис читает пользователя с явным `select` (`SESSION_USER_SELECT`, без `password_hash`).
 
 ## Схема БД (PostgreSQL, миграции `prisma/migrations`)
-`users`, `sessions`, `chats`, `chat_members`, `messages` — по §1 спеки. Миграция `20261009120000_passkeys_invites` (BE-21) заменила `allowlist` и OAuth-колонки `users` таблицами passkeys и инвайтов; миграция `20261014120000_remove_passkeys_invites` (BE-33) удалила их, enum `InviteKind` и `users.webauthn_user_id`; колонки входа по паролю — BE-44. Миграция фазы 2: CHECK `chats_type_shape` (форма direct/group). Лимит группы — `MAX_GROUP_MEMBERS` (по умолчанию 100, минимум 2) в конфигурации; `MAX_MESSAGE_LENGTH` (4000) и `MESSAGE_RATE_PER_MINUTE` (30) — лимиты сообщений; `WS_HEARTBEAT_MS` (30000) и `WS_MAX_SOCKETS_PER_USER` (10) — WebSocket. `ALLOWED_ORIGINS` нормализуется при старте (`new URL(o).origin`), невалидное значение — ошибка конфигурации.
+`users`, `sessions`, `chats`, `chat_members`, `messages` — по §1 спеки. Миграция `20261009120000_passkeys_invites` (BE-21) заменила `allowlist` и OAuth-колонки `users` таблицами passkeys и инвайтов; миграция `20261014120000_remove_passkeys_invites` (BE-33) удалила их, enum `InviteKind` и `users.webauthn_user_id`; миграция `20261015120000_password_login` (BE-44) добавила `users.login` (UNIQUE, CHECK `users_login_format`), `password_hash`, `first_name`, `last_name` (по умолчанию `''`) и CHECK `users_name_matches_parts` (`name = btrim(first_name || ' ' || last_name)`); в начале — guard: непустая `users` → `RAISE EXCEPTION` с подсказкой `prisma migrate reset`. Миграция фазы 2: CHECK `chats_type_shape` (форма direct/group). Лимит группы — `MAX_GROUP_MEMBERS` (по умолчанию 100, минимум 2) в конфигурации; `MAX_MESSAGE_LENGTH` (4000) и `MESSAGE_RATE_PER_MINUTE` (30) — лимиты сообщений; `WS_HEARTBEAT_MS` (30000) и `WS_MAX_SOCKETS_PER_USER` (10) — WebSocket. `ALLOWED_ORIGINS` нормализуется при старте (`new URL(o).origin`), невалидное значение — ошибка конфигурации.
 
 ## Тесты
-Unit — `src/**/*.spec.ts`; e2e — `test/*.e2e-spec.ts` на реальной PostgreSQL (Docker Compose: сервис `postgres-test` (профиль `test`, порт 5433, tmpfs); `accept.sh` поднимает и удаляет его; dev-БД — сервис `postgres`, порт 5434, `.env` читается через `--env-file`, BE-D14). Хелперы — `test/support/` (`createTestApp`, `loginAs`, `resetDb`, `RecordingChatEvents` — `test/support/chat-events.ts`).
+Unit — `src/**/*.spec.ts`; e2e — `test/*.e2e-spec.ts` на реальной PostgreSQL (Docker Compose: сервис `postgres-test` (профиль `test`, порт 5433, tmpfs); `accept.sh` поднимает и удаляет его; dev-БД — сервис `postgres`, порт 5434, `.env` читается через `--env-file`, BE-D14). Хелперы — `test/support/` (`createTestApp`, `loginAs` и `createUserRow` — пользователь с заранее вычисленным PHC-хэшем общего тестового пароля (константы в `test/support/db.ts`), `{name}` → `firstName = name`, `lastName = ''`; `resetDb`, `RecordingChatEvents` — `test/support/chat-events.ts`).

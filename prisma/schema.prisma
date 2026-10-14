@@ -18,12 +18,17 @@ enum ChatRole {
 }
 
 model User {
-  id         String    @id @default(uuid()) @db.Uuid
-  name       String
-  avatarUrl  String    @map("avatar_url")
-  isAdmin    Boolean   @default(false) @map("is_admin")
-  disabledAt DateTime? @map("disabled_at") @db.Timestamptz(3)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id           String    @id @default(uuid()) @db.Uuid
+  login        String    @unique
+  passwordHash String    @map("password_hash")
+  firstName    String    @map("first_name")
+  lastName     String    @default("") @map("last_name")
+  /// Производное: `btrim(first_name || ' ' || last_name)`; пишет код, согласованность держит CHECK `users_name_matches_parts`.
+  name         String
+  avatarUrl    String    @map("avatar_url")
+  isAdmin      Boolean   @default(false) @map("is_admin")
+  disabledAt   DateTime? @map("disabled_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   sessions     Session[]
   createdChats Chat[]
