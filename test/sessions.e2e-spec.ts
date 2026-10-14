@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
   Controller,
   Get,
@@ -54,7 +54,6 @@ describe('Sessions (e2e)', () => {
       data: {
         name: 'u',
         avatarUrl: '',
-        webauthnUserId: randomBytes(32),
       },
     });
     userId = user.id;
@@ -95,7 +94,7 @@ describe('Sessions (e2e)', () => {
 
     it("revokeAllForUser deletes only that user's sessions", async () => {
       const other = await prisma.user.create({
-        data: { name: 'o', avatarUrl: '', webauthnUserId: randomBytes(32) },
+        data: { name: 'o', avatarUrl: '' },
       });
       await sessions.create(userId);
       await sessions.create(userId);
@@ -209,7 +208,7 @@ describe('Sessions (e2e)', () => {
     it('existingIds skips sessions of disabled users', async () => {
       const { token } = await sessions.create(userId);
       const other = await prisma.user.create({
-        data: { name: 'o', avatarUrl: '', webauthnUserId: randomBytes(32) },
+        data: { name: 'o', avatarUrl: '' },
       });
       const { token: otherToken } = await sessions.create(other.id);
       await prisma.user.update({

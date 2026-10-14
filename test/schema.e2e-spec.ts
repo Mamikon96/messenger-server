@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { resetDb } from './support/db.js';
 import { PrismaModule } from '../src/prisma/prisma.module.js';
@@ -28,121 +27,23 @@ describe('DB schema (e2e)', () => {
   let counter = 0;
   const newUser = (name = `user-${++counter}`) =>
     prisma.user.create({
-      data: { name, avatarUrl: '', webauthnUserId: randomBytes(32) },
+      data: { name, avatarUrl: '' },
     });
 
-  it('rejects a duplicate webauthn_user_id', async () => {
-    const webauthnUserId = randomBytes(32);
-    await prisma.user.create({
-      data: { name: 'a', avatarUrl: '', webauthnUserId },
-    });
-    await expect(
-      prisma.user.create({
-        data: { name: 'b', avatarUrl: '', webauthnUserId },
-      }),
-    ).rejects.toMatchObject({ code: 'P2002' });
-  });
-
-  const insertInvite = (
-    kind: 'join' | 'recovery',
-    userId: string | null,
-    tokenHash = 'h1',
-  ) =>
-    prisma.$executeRaw`
-      INSERT INTO invites (id, token_hash, kind, user_id, expires_at)
-      VALUES (gen_random_uuid(), ${tokenHash}, ${kind}::"InviteKind", ${userId}::uuid, now() + interval '1 day')`;
-
-  it('rejects a recovery invite without user_id and a join invite with user_id', async () => {
-    const user = await newUser();
-    await expect(insertInvite('recovery', null)).rejects.toThrow(
-      /invites_kind_target/,
-    );
-    await expect(insertInvite('join', user.id)).rejects.toThrow(
-      /invites_kind_target/,
-    );
-    await expect(insertInvite('join', null)).resolves.toBe(1);
-    await expect(insertInvite('recovery', user.id, 'h2')).resolves.toBe(1);
-  });
-
-  it('rejects a recovery invite with make_admin', async () => {
-    const user = await newUser();
-    await expect(
-      prisma.invite.create({
-        data: {
-          tokenHash: 'h',
-          kind: 'recovery',
-          userId: user.id,
-          makeAdmin: true,
-          expiresAt: new Date(Date.now() + 1000),
-        },
-      }),
-    ).rejects.toThrow(/invites_recovery_not_admin/);
-  });
-
-  it('rejects a duplicate invite token_hash', async () => {
-    const data = {
-      tokenHash: 'same',
-      kind: 'join' as const,
-      expiresAt: new Date(Date.now() + 1000),
-    };
-    await prisma.invite.create({ data });
-    await expect(prisma.invite.create({ data })).rejects.toMatchObject({
-      code: 'P2002',
-    });
-  });
-
-  it('rejects an unknown challenge purpose and passkey device_type', async () => {
-    const user = await newUser();
-    await expect(
-      prisma.webauthnChallenge.create({
-        data: {
-          challenge: 'c',
-          purpose: 'bogus',
-          expiresAt: new Date(Date.now() + 1000),
-        },
-      }),
-    ).rejects.toThrow(/webauthn_challenges_purpose/);
-    await expect(
-      prisma.passkey.create({
-        data: {
-          id: 'cred',
-          userId: user.id,
-          publicKey: randomBytes(8),
-          counter: 0,
-          transports: [],
-          deviceType: 'bogus',
-          backedUp: false,
-          name: 'k',
-        },
-      }),
-    ).rejects.toThrow(/passkeys_device_type/);
-  });
-
-  it('deletes passkeys and challenges with the user (cascade)', async () => {
-    const user = await newUser();
-    await prisma.passkey.create({
-      data: {
-        id: 'cred',
-        userId: user.id,
-        publicKey: randomBytes(8),
-        counter: 0,
-        transports: ['internal'],
-        deviceType: 'multiDevice',
-        backedUp: true,
-        name: 'k',
-      },
-    });
-    await prisma.webauthnChallenge.create({
-      data: {
-        challenge: 'c',
-        purpose: 'add_passkey',
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 1000),
-      },
-    });
-    await prisma.user.delete({ where: { id: user.id } });
-    expect(await prisma.passkey.count()).toBe(0);
-    expect(await prisma.webauthnChallenge.count()).toBe(0);
+  it('has no passkey, WebAuthn challenge and invite storage (BE-33)', async () => {
+    const tables = await prisma.$queryRaw<{ table_name: string }[]>`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name IN ('passkeys', 'webauthn_challenges', 'invites')`;
+    expect(tables).toEqual([]);
+    const columns = await prisma.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'users' AND column_name = 'webauthn_user_id'`;
+    expect(columns).toEqual([]);
+    const types = await prisma.$queryRaw<{ typname: string }[]>`
+      SELECT typname FROM pg_type WHERE typname = 'InviteKind'`;
+    expect(types).toEqual([]);
   });
 
   it('defaults sessions.created_at to now', async () => {

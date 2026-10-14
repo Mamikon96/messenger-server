@@ -175,8 +175,8 @@
 - `package.json`: `engines.node` `>=24.7` (встроенный `crypto.argon2`).
 
 ## 9. Схема БД
-Одна миграция без переноса данных (реальных пользователей нет):
-- `users`: добавить `login text NOT NULL UNIQUE` (CHECK: равен `lower(login)` и соответствует формату §4.1), `password_hash text NOT NULL`, `first_name text NOT NULL`, `last_name text NOT NULL DEFAULT ''`; удалить `webauthn_user_id`; `name` остаётся колонкой и хранится производным значением `trim(first_name || ' ' || last_name)`: сервер обновляет его при регистрации и `PATCH /api/me`, поэтому чтение чатов, участников и WS-событий не меняется.
+Две миграции без переноса данных (реальных пользователей нет; разрез — BE-D38): первая удаляет таблицы passkeys и инвайтов и `users.webauthn_user_id`, вторая добавляет колонки входа по паролю и начинается с проверки, что `users` пуста (иначе ошибка с подсказкой сбросить dev-БД):
+- `users`: добавить `login text NOT NULL UNIQUE` (CHECK: равен `lower(login)` и соответствует формату §4.1), `password_hash text NOT NULL`, `first_name text NOT NULL`, `last_name text NOT NULL DEFAULT ''`; удалить `webauthn_user_id`; `name` остаётся колонкой и хранится производным значением `trim(first_name || ' ' || last_name)`: сервер обновляет его при регистрации и `PATCH /api/me`, поэтому чтение чатов, участников и WS-событий не меняется; CHECK `name = btrim(first_name || ' ' || last_name)` страхует согласованность.
 - Удалить таблицы `passkeys`, `webauthn_challenges`, `invites` и enum `InviteKind`.
 - `sessions` — без изменений схемы.
 

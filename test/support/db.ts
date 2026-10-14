@@ -5,7 +5,7 @@ import { SessionsService } from '../../src/sessions/sessions.service.js';
 
 export async function resetDb(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE webauthn_challenges, passkeys, invites, messages, chat_members, chats, sessions, users RESTART IDENTITY CASCADE',
+    'TRUNCATE messages, chat_members, chats, sessions, users RESTART IDENTITY CASCADE',
   );
 }
 
@@ -25,7 +25,6 @@ export async function loginAs(
       name: options.name ?? `user-${randomBytes(4).toString('hex')}`,
       avatarUrl: '',
       isAdmin: options.isAdmin ?? false,
-      webauthnUserId: randomBytes(32),
       disabledAt: options.disabled ? new Date() : null,
     },
   });
