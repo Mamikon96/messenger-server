@@ -8,7 +8,6 @@ export type ErrorCode =
   | 'csrf_invalid'
   | 'unsupported_type'
   | 'unauthorized'
-  | 'invite_invalid'
   | 'auth_failed'
   | 'user_disabled'
   | 'not_found'

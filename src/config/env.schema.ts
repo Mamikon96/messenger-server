@@ -13,8 +13,6 @@ export interface AppConfig {
   messageRatePerMinute: number;
   wsHeartbeatMs: number;
   wsMaxSocketsPerUser: number;
-  rpName: string;
-  inviteTtlHours: number;
   authRatePerMinute: number;
   trustProxy: number;
 }
@@ -51,8 +49,6 @@ const envSchema = z.object({
   MESSAGE_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
   WS_HEARTBEAT_MS: z.coerce.number().int().positive().default(30000),
   WS_MAX_SOCKETS_PER_USER: z.coerce.number().int().min(1).default(10),
-  RP_NAME: z.string().min(1).default('Messenger'),
-  INVITE_TTL_HOURS: z.coerce.number().int().positive().default(72),
   AUTH_RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
@@ -71,8 +67,6 @@ export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
     messageRatePerMinute: env.MESSAGE_RATE_PER_MINUTE,
     wsHeartbeatMs: env.WS_HEARTBEAT_MS,
     wsMaxSocketsPerUser: env.WS_MAX_SOCKETS_PER_USER,
-    rpName: env.RP_NAME,
-    inviteTtlHours: env.INVITE_TTL_HOURS,
     authRatePerMinute: env.AUTH_RATE_PER_MINUTE,
     trustProxy: env.TRUST_PROXY,
   };

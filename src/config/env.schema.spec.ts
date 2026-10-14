@@ -36,28 +36,25 @@ describe('parseEnv', () => {
     expect(config).not.toHaveProperty('oauth');
   });
 
-  it('defaults RP_NAME to Messenger, INVITE_TTL_HOURS to 72, AUTH_RATE_PER_MINUTE to 20, TRUST_PROXY to 0', () => {
+  it('defaults AUTH_RATE_PER_MINUTE to 20 and TRUST_PROXY to 0', () => {
     const config = parseEnv(valid);
-    expect(config.rpName).toBe('Messenger');
-    expect(config.inviteTtlHours).toBe(72);
     expect(config.authRatePerMinute).toBe(20);
     expect(config.trustProxy).toBe(0);
   });
 
-  it('reads RP_NAME, INVITE_TTL_HOURS, AUTH_RATE_PER_MINUTE and TRUST_PROXY', () => {
+  it('reads AUTH_RATE_PER_MINUTE and TRUST_PROXY', () => {
     const config = parseEnv({
       ...valid,
-      RP_NAME: 'Chat',
-      INVITE_TTL_HOURS: '24',
       AUTH_RATE_PER_MINUTE: '5',
       TRUST_PROXY: '1',
     });
-    expect(config).toMatchObject({
-      rpName: 'Chat',
-      inviteTtlHours: 24,
-      authRatePerMinute: 5,
-      trustProxy: 1,
-    });
+    expect(config).toMatchObject({ authRatePerMinute: 5, trustProxy: 1 });
+  });
+
+  it('ignores RP_NAME and INVITE_TTL_HOURS (BE-33)', () => {
+    const config = parseEnv({ ...valid, RP_NAME: 'Chat', INVITE_TTL_HOURS: 'x' });
+    expect(config).not.toHaveProperty('rpName');
+    expect(config).not.toHaveProperty('inviteTtlHours');
   });
 
   it('rejects TRUST_PROXY=-1', () => {

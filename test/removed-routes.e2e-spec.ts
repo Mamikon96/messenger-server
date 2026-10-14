@@ -1,21 +1,29 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { InvitesService } from '../src/invites/invites.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './support/create-app.js';
 import { type TestLogin, loginAs, resetDb } from './support/db.js';
 
 type Method = 'get' | 'post' | 'patch' | 'delete';
 
+// BE-32: «мои ключи» и админка инвайтов; BE-33: вход по passkey и проверка инвайта.
 const REMOVED: [Method, string][] = [
   ['get', '/api/me/passkeys'],
   ['post', '/api/me/passkeys/options'],
   ['post', '/api/me/passkeys/verify'],
+  ['patch', '/api/me/passkeys/some-id'],
+  ['delete', '/api/me/passkeys/some-id'],
   ['get', '/api/admin/invites'],
   ['post', '/api/admin/invites'],
+  ['delete', '/api/admin/invites/some-id'],
+  ['post', '/api/auth/passkey/register/options'],
+  ['post', '/api/auth/passkey/register/verify'],
+  ['post', '/api/auth/passkey/login/options'],
+  ['post', '/api/auth/passkey/login/verify'],
+  ['post', '/api/invites/inspect'],
 ];
 
-describe('Removed routes (e2e, BE-32)', () => {
+describe('Removed routes (e2e, BE-32, BE-33)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let admin: TestLogin;
@@ -41,50 +49,22 @@ describe('Removed routes (e2e, BE-32)', () => {
         [method](path)
         .set('Cookie', admin.cookie)
         .set('X-CSRF-Token', admin.csrf)
+        .set('Origin', 'http://localhost:3000')
         .send({})
         .expect(404);
       expect(res.body.error.code).toBe('not_found');
     },
   );
 
-  it('PATCH/DELETE /api/me/passkeys/:id on an existing own passkey -> 404, passkey untouched', async () => {
-    const passkey = await prisma.passkey.create({
-      data: {
-        id: 'cred-removed-routes',
-        userId: admin.userId,
-        publicKey: Buffer.from('k'),
-        counter: 0,
-        transports: [],
-        deviceType: 'singleDevice',
-        backedUp: false,
-        name: 'Original',
-      },
-    });
-    for (const method of ['patch', 'delete'] as const) {
+  it.each(REMOVED)(
+    'anonymous: %s %s -> 404 not_found',
+    async (method, path) => {
       const res = await request(app.getHttpServer())
-        [method](`/api/me/passkeys/${passkey.id}`)
-        .set('Cookie', admin.cookie)
-        .set('X-CSRF-Token', admin.csrf)
-        .send({ name: 'Renamed' })
+        [method](path)
+        .set('Origin', 'http://localhost:3000')
+        .send({})
         .expect(404);
       expect(res.body.error.code).toBe('not_found');
-    }
-    const rows = await prisma.passkey.findMany();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.name).toBe('Original');
-  });
-
-  it('DELETE /api/admin/invites/:id on a pending invite -> 404, invite not revoked', async () => {
-    const invite = await app.get(InvitesService).createJoin(admin.userId);
-    const res = await request(app.getHttpServer())
-      .delete(`/api/admin/invites/${invite.id}`)
-      .set('Cookie', admin.cookie)
-      .set('X-CSRF-Token', admin.csrf)
-      .expect(404);
-    expect(res.body.error.code).toBe('not_found');
-    const row = await prisma.invite.findUniqueOrThrow({
-      where: { id: invite.id },
-    });
-    expect(row.revokedAt).toBeNull();
-  });
+    },
+  );
 });
