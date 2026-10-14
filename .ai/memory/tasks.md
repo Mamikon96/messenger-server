@@ -1,22 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-14 @ a21e85d+dirty
+> Проверено: 2026-10-14 @ 7eff7f6+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-32 (P1)** Удалить управление passkeys и админские инвайты (часть SH-D18, не участвующая во входе)
-  - Цель: маршруты управления своими passkeys (`/api/me/passkeys*`) и админских инвайтов (`/api/admin/invites*`) исчезают из API, вход по passkey и регистрация/восстановление по инвайту из CLI `admin:invite` работают как раньше.
-  - Критерии приёмки:
-    1. Каждый прежний маршрут `/api/me/passkeys*` (список, добавление — опции и подтверждение, переименование, удаление) отвечает `404 not_found` в формате ошибок API.
-    2. Каждый прежний маршрут `/api/admin/invites*` (список, выдача, отзыв) отвечает `404 not_found` в формате ошибок API.
-    3. Коды `reauth_required` и `last_passkey` удалены из `src/common/app-error.ts` и из документации; `REAUTH_WINDOW_MS` удалён.
-    4. Вход по passkey и регистрация/восстановление по инвайту, выданному CLI `admin:invite`, проходят свои e2e без изменений поведения.
-    5. `docs/client-integration.md` (§1.3, §2.8, §3.11, §4 `PasskeyItem`/`InviteItem`/`IssuedInvite`, §6, §7), core-спека (маршруты, строка кодов) и `architecture.md` соответствуют коду; `scripts/check-sync.mjs` зелёный.
-  - Вне рамок: схема БД и миграции, удаление ядра `src/passkeys/`, `src/webauthn/`, `src/invites/`, CLI `admin:invite` и `@simplewebauthn/server` (BE-33); вход по паролю; `logout-all` (BE-35).
-  - Затрагивает: `src/passkeys/` (me-passkeys.controller.ts, me-passkeys.service.ts, dto/add-passkey.dto.ts, dto/rename-passkey.dto.ts), `src/invites/` (admin-invites.controller.ts, dto/create-invite.dto.ts, неиспользуемые методы `InvitesService`), `src/common/app-error.ts`, test/me-passkeys.e2e-spec.ts, `test/invites.e2e-spec.ts`, `test/admin-users.e2e-spec.ts`, `docs/client-integration.md`, core-спека, `.ai/memory/architecture.md`; контракт API: да (удаление маршрутов и кодов по спеке `docs/auth-password-spec.md`); схема БД: нет.
-  - Проверка: сначала e2e на `404 not_found` удалённых маршрутов (красные до удаления); `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh` = 0 и APPROVE `nestjs-reviewer`.
-  - Осталось: повторное ревью `nestjs-reviewer` после правок (MAJOR и MINOR исправлены) → push и PR.
+(нет)
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
