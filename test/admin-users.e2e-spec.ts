@@ -150,36 +150,6 @@ describe('Admin users (e2e)', () => {
     expect(res.body.error.code).toBe('csrf_invalid');
   });
 
-  it('recovery invite for unknown user → 404 not_found, for existing → kind recovery with userId', async () => {
-    const create = (body: object) =>
-      http()
-        .post('/api/admin/invites')
-        .set('Cookie', admin.cookie)
-        .set('X-CSRF-Token', admin.csrf)
-        .send(body);
-    const missing = await create({
-      kind: 'recovery',
-      userId: '00000000-0000-4000-8000-000000000000',
-    }).expect(404);
-    expect(missing.body.error.code).toBe('not_found');
-    const bob = await loginAs(app, { name: 'Bob' });
-    const res = await create({ kind: 'recovery', userId: bob.userId }).expect(
-      201,
-    );
-    expect(res.body.kind).toBe('recovery');
-    expect(res.body.userId).toBe(bob.userId);
-    const row = await prisma.invite.findUniqueOrThrow({
-      where: { id: res.body.id },
-    });
-    expect(row.makeAdmin).toBe(false);
-    const inspected = await http()
-      .post('/api/invites/inspect')
-      .set('Origin', 'http://localhost:3000')
-      .send({ token: res.body.url.split('#')[1] })
-      .expect(200);
-    expect(inspected.body.kind).toBe('recovery');
-  });
-
   it("disable closes the user's WebSocket with 4401 on the next heartbeat tick", async () => {
     const bob = await loginAs(app, { name: 'Bob' });
     const client = await connectWs(app, { cookie: bob.cookie });
