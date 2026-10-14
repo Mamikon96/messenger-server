@@ -10,6 +10,7 @@ export type ErrorCode =
   | 'unauthorized'
   | 'auth_failed'
   | 'user_disabled'
+  | 'login_taken'
   | 'not_found'
   | 'internal_error';
 

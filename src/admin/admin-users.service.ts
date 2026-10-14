@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { lockUserRow } from '../auth/user-lock.js';
 import { AppError } from '../common/app-error.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SessionsService } from '../sessions/sessions.service.js';
@@ -42,10 +43,8 @@ export class AdminUsersService {
   ): Promise<AdminUserItem> {
     if (id === actorId) throw new AppError(403, 'forbidden');
     return this.prisma.$transaction(async (tx) => {
-      // та же блокировка строки, что берут вход и восстановление (гонка «отключение ↔ вход»)
-      const locked = await tx.$queryRaw<{ id: string }[]>`
-        SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
-      if (locked.length === 0) throw new AppError(404, 'not_found');
+      // та же блокировка строки, что берёт вход (гонка «отключение ↔ вход»)
+      if (!(await lockUserRow(tx, id))) throw new AppError(404, 'not_found');
       const current = await tx.user.findUniqueOrThrow({
         where: { id },
         select,

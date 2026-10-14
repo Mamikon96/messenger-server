@@ -13,7 +13,7 @@ import { SessionGuard } from '../src/sessions/session.guard.js';
 import { SessionsModule } from '../src/sessions/sessions.module.js';
 import { SessionsService } from '../src/sessions/sessions.service.js';
 import { createTestApp } from './support/create-app.js';
-import { resetDb } from './support/db.js';
+import { createUserRow, resetDb } from './support/db.js';
 
 @Controller('probe')
 @UseGuards(SessionGuard, CsrfGuard)
@@ -50,12 +50,7 @@ describe('Sessions (e2e)', () => {
 
   beforeEach(async () => {
     await resetDb(prisma);
-    const user = await prisma.user.create({
-      data: {
-        name: 'u',
-        avatarUrl: '',
-      },
-    });
+    const user = await createUserRow(prisma, { name: 'u' });
     userId = user.id;
   });
 
@@ -93,9 +88,7 @@ describe('Sessions (e2e)', () => {
     });
 
     it("revokeAllForUser deletes only that user's sessions", async () => {
-      const other = await prisma.user.create({
-        data: { name: 'o', avatarUrl: '' },
-      });
+      const other = await createUserRow(prisma, { name: 'o' });
       await sessions.create(userId);
       await sessions.create(userId);
       const { token: otherToken } = await sessions.create(other.id);
@@ -207,9 +200,7 @@ describe('Sessions (e2e)', () => {
 
     it('existingIds skips sessions of disabled users', async () => {
       const { token } = await sessions.create(userId);
-      const other = await prisma.user.create({
-        data: { name: 'o', avatarUrl: '' },
-      });
+      const other = await createUserRow(prisma, { name: 'o' });
       const { token: otherToken } = await sessions.create(other.id);
       await prisma.user.update({
         where: { id: userId },
