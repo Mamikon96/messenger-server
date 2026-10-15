@@ -35,6 +35,8 @@ describe('AuthService', () => {
   const transaction = vi.fn();
   const sessionsCreate = vi.fn();
   const sessionsDestroy = vi.fn();
+  const userUpdate = vi.fn();
+  const revokeOthers = vi.fn();
   let service: AuthService;
   let limiter: LoginAttemptLimiter;
 
@@ -56,7 +58,12 @@ describe('AuthService', () => {
     transaction.mockImplementation((fn: (tx: unknown) => unknown) => {
       calls.push('tx');
       return fn({
-        user: { create: userCreate, findUnique, findUniqueOrThrow },
+        user: {
+          create: userCreate,
+          findUnique,
+          findUniqueOrThrow,
+          update: userUpdate,
+        },
         $queryRaw: queryRaw,
       });
     });
@@ -73,6 +80,7 @@ describe('AuthService', () => {
     const sessions = {
       create: sessionsCreate,
       destroy: sessionsDestroy,
+      revokeOtherSessions: revokeOthers,
     } as unknown as SessionsService;
     limiter = new LoginAttemptLimiter();
     service = new AuthService(prisma, sessions, limiter);
@@ -279,6 +287,106 @@ describe('AuthService', () => {
         service.login({ login: 'alice', password: 'x' }),
       ).rejects.toMatchObject({ code: 'user_disabled' });
       expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    const dto = {
+      currentPassword: 'current-password',
+      newPassword: 'new-password-1234',
+    };
+    const found = { login: 'alice', passwordHash: STORED_HASH };
+    const lock = (hash = STORED_HASH, disabledAt: Date | null = null) =>
+      queryRaw.mockResolvedValue([
+        { password_hash: hash, disabled_at: disabledAt },
+      ]);
+
+    it('verifies, hashes outside the transaction, then writes and revokes the others in it', async () => {
+      findUnique.mockResolvedValue(found);
+      lock();
+      revokeOthers.mockImplementation(() => {
+        calls.push('revoke');
+        return Promise.resolve(2);
+      });
+      userUpdate.mockImplementation(() => {
+        calls.push('update');
+        return Promise.resolve({});
+      });
+      await service.changePassword('u1', 'tok', dto);
+      expect(calls).toEqual(['verify', 'hash', 'tx', 'update', 'revoke']);
+      expect(userUpdate).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { passwordHash: '$argon2id$new' },
+      });
+      expect(revokeOthers).toHaveBeenCalledWith('u1', 'tok', expect.anything());
+    });
+
+    it('limited login: 429 before the database query and any argon2 work', async () => {
+      for (let i = 0; i < 10; i++) limiter.acquire('alice');
+      findUnique.mockResolvedValue(found);
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({
+        code: 'rate_limited',
+      });
+      expect(calls).toEqual([]);
+      expect(userUpdate).not.toHaveBeenCalled();
+    });
+
+    it('wrong current password: 401 auth_failed, counted in the login counter, nothing written', async () => {
+      findUnique.mockResolvedValue(found);
+      vi.mocked(verifyPassword).mockResolvedValue(false);
+      for (let i = 0; i < 10; i++) {
+        await expect(
+          service.changePassword('u1', 'tok', dto),
+        ).rejects.toMatchObject({ code: 'auth_failed' });
+      }
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({
+        code: 'rate_limited',
+      });
+      expect(hashPassword).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('a correct current password resets the counter', async () => {
+      findUnique.mockResolvedValue(found);
+      lock();
+      limiter.acquire('alice');
+      limiter.acquire('alice');
+      await service.changePassword('u1', 'tok', dto);
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('password_hash changed under the lock: 401 auth_failed, nothing written or revoked', async () => {
+      findUnique.mockResolvedValue(found);
+      lock('$argon2id$other');
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({
+        code: 'auth_failed',
+      });
+      expect(userUpdate).not.toHaveBeenCalled();
+      expect(revokeOthers).not.toHaveBeenCalled();
+    });
+
+    it('disabled under the lock or the user is gone: 401 unauthorized, nothing written', async () => {
+      findUnique.mockResolvedValue(found);
+      lock(STORED_HASH, new Date());
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({
+        code: 'unauthorized',
+      });
+      findUnique.mockResolvedValue(null);
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({
+        code: 'unauthorized',
+      });
+      expect(userUpdate).not.toHaveBeenCalled();
+      expect(revokeOthers).not.toHaveBeenCalled();
     });
   });
 });
