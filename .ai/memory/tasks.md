@@ -1,11 +1,25 @@
 # Задачи backend
-> Проверено: 2026-10-15 @ ccf937c+dirty
+> Проверено: 2026-10-15 @ f109ce0+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-(нет)
+- **BE-48 (P2, харнес)** Экономия токенов: одна задача — одна сессия, лишние плагины, тихие проверки, автоштамп, повторное ревью по дельте (SH-D19)
+  - Цель: задача не тянет в контекст историю закрытых задач, нерелевантные плагины и шумный вывод проверок, а память и ревью не тратят лишние ходы.
+  - Критерии приёмки:
+    1. SessionStart (источник `startup` или `clear`) запоминает первую запись `.ai/memory/tasks-archive.md` по `session_id` во временном каталоге вне репозитория; при `resume`/`compact` снимок не перезаписывается, если он уже есть.
+    2. UserPromptSubmit-hook (новый файл scripts/hooks/session-guard.mjs): если первая запись архива отличается от снимка сессии, промпт блокируется с текстом «задача закрыта в этой сессии — сделай /clear»; промпт, начинающийся с `!continue`, проходит.
+    3. Тот же hook: контекст последнего ответа в транскрипте (input + cache read + cache creation) больше порога — 150 000 для модели с `opus` в имени, 90 000 для остальных — промпт не блокируется, агент получает напоминание обновить «Осталось» и предложить `/clear`, пользователь видит сообщение.
+    4. `.claude/settings.json`: плагины playwright, chrome-devtools-mcp, frontend-design отключены в проекте, hook из п. 2–3 зарегистрирован.
+    5. `scripts/check-fast.sh` и `scripts/accept.sh` запускают vitest с `--reporter=dot`; JSON-отчёты для строки «Автоприёмка» сохраняются.
+    6. Штамп `> Проверено: …` в `state.md`, `tasks.md`, `architecture.md` пишет новый скрипт scripts/stamp-memory.mjs после успешной `scripts/check-memory.sh`; `scripts/hooks/protect.mjs` запрещает ручную правку строки штампа.
+    7. Повторное ревью: `.ai/rules/acceptance.md`, `.ai/rules/workflow.md` и `.claude/agents/nestjs-reviewer.md` описывают новый `nestjs-reviewer` со списком прошлых замечаний и диффом фикса; `workflow.md` §5 и `memory-protocol.md` (шаг штампа) — по новым hooks.
+    8. Пункты 1–3, 6 покрыты тестами в `scripts/hooks/hooks.spec.mjs` и спеке скрипта штампа; тесты пишутся до реализации.
+  - Вне рамок: отключение superpowers, разрез `decisions.md` и `docs/client-integration.md` (отдельное решение); перенос фронтовых агентов из `~/.claude/agents` (вне репозитория); Stop-hook `scripts/hooks/stop-gate.mjs` не меняется.
+  - Затрагивает: `scripts/hooks/` (новый session-guard.mjs, `session-brief.sh`, `protect.mjs`, `hooks.spec.mjs`), scripts/stamp-memory.mjs (новый), `scripts/check-memory.sh`, `scripts/check-fast.sh`, `scripts/accept.sh`, `.claude/settings.json`, `.claude/agents/nestjs-reviewer.md`, `.ai/rules/` (workflow, memory-protocol, acceptance), `.ai/memory/README.md`, `CLAUDE.md`; контракт API: нет; схема БД: нет.
+  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; APPROVE `nestjs-reviewer` обязателен (решение пользователя: hooks — исполняемый код).
+  - Осталось: тесты (п. 8, до реализации); реализация п. 1–7; `bash scripts/accept.sh`; ревью `nestjs-reviewer`; PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
