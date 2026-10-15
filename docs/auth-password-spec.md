@@ -125,17 +125,18 @@
 ```
 | `details[].code` | Где |
 |---|---|
-| `required` | любое обязательное поле отсутствует или пустое |
+| `required` | любое обязательное поле отсутствует, пустое (у `firstName` — после `trim`) или не строка |
 | `invalid_format` | `login` не проходит формат §4.1 |
-| `too_short` | `password`/`newPassword` < 12 байт, `firstName` пустое после `trim` |
+| `too_short` | `password`/`newPassword` < 12 байт |
 | `too_long` | `password`/`newPassword` > 256 байт, `login` > 32, `firstName`/`lastName` > 64 |
 | `too_common` | пароль из списка частых |
 
 `details` есть только у ошибок полей auth/профиля; у остальных `400` поля нет. Клиент не должен зависеть от `message`.
 
-Уточнения для `POST /api/auth/register` и `POST /api/auth/login` (BE-D37, FE-D40):
+Уточнения для `POST /api/auth/register`, `POST /api/auth/login`, `PATCH /api/me` и `POST /api/me/password` (BE-D37, FE-D40):
 - Поле неверного типа (число, массив, `null` и т. п. вместо строки) — как отсутствующее: `details: [{field, code: "required"}]`.
 - Битый JSON или тело, которое не является объектом (массив, строка, число, `null`), — `400 validation_failed` без `details`. Пустое тело считается `{}` (ошибки `required` по полям).
+- Для `PATCH /api/me` (BE-38): неверный тип у присутствующего ключа — `required` для обоих полей (и `lastName`); `firstName` пустое после `trim` — `required`, поэтому `too_short` у него не бывает. «Хотя бы одно поле» проверяется по ключам. Пустое тело `{}`, тело только с неизвестными полями и неизвестное поле при валидных — `400` без `details`; неизвестное поле рядом с ошибкой известного — `details` только по известному полю.
 - Одно поле — не больше одного кода. Приоритет для `login`: `required` > `too_long` > `invalid_format`. Для `password` коды взаимоисключающие (`too_short` и `too_long` не совпадают, `too_common` проверяется только для 12..256 байт).
 
 Изменения в таблице кодов `docs/client-integration.md` §1.3:
