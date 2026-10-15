@@ -39,6 +39,8 @@ describe('check-sync', () => {
     ['a route in code that docs do not mention', 'src/users/users.controller.ts', (t) => t.replace('@Get()', "@Get()\n  @Get('extra')"), /маршруты/],
     ['a route documented in the client doc but gone from code', 'docs/client-integration.md', (t) => t.replace('`GET /api/users`', '`GET /api/people`'), /маршруты/],
     ['an error code missing from docs', 'src/common/app-error.ts', (t) => t.replace("| 'not_found'", "| 'not_found'\n  | 'teapot'"), /teapot/],
+    ['a details code in code that docs do not mention', 'src/common/app-error.ts', (t) => t.replace("| 'too_common'", "| 'too_common'\n  | 'teapot_detail'"), /teapot_detail/],
+    ['a details code documented but gone from code', 'docs/client-integration.md', (t) => t.replace('| `too_common` |', '| `too_rare` |'), /too_rare/],
     ['a stale env default in .env.example', '.env.example', (t) => t.replace('MESSAGE_RATE_PER_MINUTE=30', 'MESSAGE_RATE_PER_MINUTE=31'), /MESSAGE_RATE_PER_MINUTE/],
     ['an env var absent from .env.example', '.env.example', (t) => t.replace('SESSION_TTL_DAYS=7\n', ''), /SESSION_TTL_DAYS/],
     ['a WS payload limit that differs from docs', 'src/realtime/realtime.gateway.ts', (t) => t.replace('maxPayload: 4096', 'maxPayload: 8192'), /КиБ/],

@@ -27,7 +27,7 @@ export class SlidingWindowLimiter {
         Math.ceil((recent[0] + this.windowMs - now) / 1000),
       );
       throw new AppError(429, 'rate_limited', this.message, {
-        'Retry-After': String(retryAfter),
+        headers: { 'Retry-After': String(retryAfter) },
       });
     }
     recent.push(now);

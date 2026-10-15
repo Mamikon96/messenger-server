@@ -178,6 +178,7 @@ describe('Messages (e2e)', () => {
       const { alice, chatId } = await directChat();
       const res = await send(alice, chatId, payload).expect(400);
       expect(res.body.error.code).toBe('validation_failed');
+      expect(res.body.error).not.toHaveProperty('details');
       expect(await prisma.message.count()).toBe(0);
       expect(recorder.events).toHaveLength(0);
     });
@@ -411,6 +412,7 @@ describe('Messages (e2e)', () => {
       const { alice, chatId } = await seeded(2);
       const res = await history(alice, chatId, query).expect(400);
       expect(res.body.error.code).toBe('validation_failed');
+      expect(res.body.error).not.toHaveProperty('details');
     });
   });
 

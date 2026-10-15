@@ -43,7 +43,8 @@ export class AuthController {
   @HttpCode(201)
   @UseGuards(OriginGuard, AuthRateLimitGuard)
   async register(
-    @Body(new ZodValidationPipe(registerSchema)) dto: CredentialsDto,
+    @Body(new ZodValidationPipe(registerSchema, { details: true }))
+    dto: CredentialsDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionBody> {
@@ -60,7 +61,8 @@ export class AuthController {
   @HttpCode(200)
   @UseGuards(OriginGuard, AuthRateLimitGuard)
   async login(
-    @Body(new ZodValidationPipe(loginSchema)) dto: CredentialsDto,
+    @Body(new ZodValidationPipe(loginSchema, { details: true }))
+    dto: CredentialsDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionBody> {
