@@ -12,9 +12,9 @@ changed=$({ git diff --name-only HEAD -- src scripts; git ls-files -o --exclude-
 if [ -n "$changed" ]; then
   echo "==> Unit-тесты, связанные с изменёнными файлами"
   # shellcheck disable=SC2086
-  npx vitest related --run --passWithNoTests $changed
+  npx vitest related --run --passWithNoTests --reporter=dot $changed
 else
   echo "==> Unit-тесты (изменений нет — все)"
-  npx vitest run
+  npx vitest run --reporter=dot
 fi
 echo "==> Быстрая проверка пройдена"

@@ -5,3 +5,4 @@ dist/
 .superpowers/
 src/generated/
 .claude/settings.local.json
+.claude/handoff/
