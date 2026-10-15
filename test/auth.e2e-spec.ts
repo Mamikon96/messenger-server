@@ -646,3 +646,91 @@ describe('Auth rate limit on the full AppModule (e2e)', () => {
     }).expect(429);
   });
 });
+
+describe('Login attempt limit per login (e2e)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  const WRONG = 'wrong password!!';
+
+  const login = (body: object) =>
+    request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('Origin', ORIGIN)
+      .send(body);
+  const fail = async (loginName: string, times: number) => {
+    for (let i = 0; i < times; i++) {
+      await login({ login: loginName, password: WRONG }).expect(401);
+    }
+  };
+
+  beforeAll(async () => {
+    // the per-IP bucket (20/min) must not interfere: all requests come from one address
+    vi.stubEnv('AUTH_RATE_PER_MINUTE', '1000');
+    app = await createTestApp();
+    prisma = app.get(PrismaService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  beforeEach(async () => {
+    await resetDb(prisma);
+  });
+
+  it('the 11th attempt with the right password after 10 failures: 429 rate_limited + Retry-After, no session', async () => {
+    await createUserRow(prisma, { login: 'limited' });
+    await fail('limited', 10);
+    const res = await login({
+      login: 'limited',
+      password: TEST_PASSWORD,
+    }).expect(429);
+    expect(res.body.error.code).toBe('rate_limited');
+    const retryAfter = Number(res.headers['retry-after']);
+    expect(retryAfter).toBeGreaterThan(14 * 60);
+    expect(retryAfter).toBeLessThanOrEqual(15 * 60);
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(await prisma.session.count()).toBe(0);
+  });
+
+  it('Alice, alice and " ALICE " share one counter; another login is unaffected', async () => {
+    await createUserRow(prisma, { login: 'alice' });
+    await createUserRow(prisma, { login: 'bob' });
+    await fail('Alice', 4);
+    await fail('alice', 3);
+    await fail('  ALICE ', 3);
+    await login({ login: 'alice', password: TEST_PASSWORD }).expect(429);
+    await login({ login: 'bob', password: TEST_PASSWORD }).expect(200);
+  });
+
+  it('a successful login resets the counter', async () => {
+    await createUserRow(prisma, { login: 'resetter' });
+    await fail('resetter', 9);
+    await login({ login: 'resetter', password: TEST_PASSWORD }).expect(200);
+    await fail('resetter', 9);
+    await login({ login: 'resetter', password: TEST_PASSWORD }).expect(200);
+  });
+
+  it('failures for a well-formed login that does not exist are counted too', async () => {
+    await fail('ghost', 10);
+    const res = await login({ login: 'ghost', password: WRONG }).expect(429);
+    expect(res.body.error.code).toBe('rate_limited');
+    expect(Number(res.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a login that violates the format is never counted: always 401 auth_failed', async () => {
+    const tooLong = 'x'.repeat(33);
+    for (const bad of [tooLong, 'bad login', 'ab', 'café-user']) {
+      for (let i = 0; i < 12; i++) {
+        const res = await login({ login: bad, password: WRONG }).expect(401);
+        expect(res.body.error.code).toBe('auth_failed');
+      }
+    }
+  });
+
+  it('a disabled user with the right password gets 403 user_disabled while not limited', async () => {
+    await createUserRow(prisma, { login: 'off', disabled: true });
+    await login({ login: 'off', password: TEST_PASSWORD }).expect(403);
+  });
+});

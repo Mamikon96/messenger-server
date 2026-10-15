@@ -1,5 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../common/app-error.js';
+import { LoginAttemptLimiter } from '../common/login-attempt-limiter.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { SessionsService } from '../sessions/sessions.service.js';
 import { AuthService } from './auth.service.js';
@@ -35,6 +36,7 @@ describe('AuthService', () => {
   const sessionsCreate = vi.fn();
   const sessionsDestroy = vi.fn();
   let service: AuthService;
+  let limiter: LoginAttemptLimiter;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -72,7 +74,8 @@ describe('AuthService', () => {
       create: sessionsCreate,
       destroy: sessionsDestroy,
     } as unknown as SessionsService;
-    service = new AuthService(prisma, sessions);
+    limiter = new LoginAttemptLimiter();
+    service = new AuthService(prisma, sessions, limiter);
   });
 
   describe('register', () => {
@@ -117,6 +120,96 @@ describe('AuthService', () => {
       await expect(
         service.register({ login: 'alice', password: 'whatever-long-pass' }),
       ).rejects.toBe(boom);
+    });
+  });
+
+  describe('login attempt limit', () => {
+    const exhaust = (login: string) => {
+      for (let i = 0; i < 10; i++) limiter.acquire(login);
+    };
+
+    it('limited login: 429 before any database query or argon2 work', async () => {
+      exhaust('alice');
+      const error: unknown = await service
+        .login({ login: ' Alice ', password: 'x' })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AppError);
+      expect(error).toMatchObject({ code: 'rate_limited' });
+      expect((error as AppError).headers?.['Retry-After']).toBeDefined();
+      expect(findUnique).not.toHaveBeenCalled();
+      expect(calls).toEqual([]);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('counts failures for an unknown but well-formed login', async () => {
+      findUnique.mockResolvedValue(null);
+      for (let i = 0; i < 10; i++) {
+        await expect(
+          service.login({ login: 'Nobody', password: 'x' }),
+        ).rejects.toMatchObject({ code: 'auth_failed' });
+      }
+      await expect(
+        service.login({ login: 'nobody', password: 'x' }),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+    });
+
+    it('does not count or store a login that violates the format', async () => {
+      for (let i = 0; i < 12; i++) {
+        await expect(
+          service.login({ login: `bad login ${i}!`, password: 'x' }),
+        ).rejects.toMatchObject({ code: 'auth_failed' });
+      }
+      await expect(
+        service.login({ login: 'a'.repeat(40), password: 'x' }),
+      ).rejects.toMatchObject({ code: 'auth_failed' });
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('a successful login resets the counter', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      findUniqueOrThrow.mockResolvedValue(userRow);
+      queryRaw.mockResolvedValue([
+        { password_hash: STORED_HASH, disabled_at: null },
+      ]);
+      for (let i = 0; i < 9; i++) limiter.acquire('alice');
+      await service.login({ login: 'alice', password: 'x' });
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('a database failure after acquire keeps the slot counted', async () => {
+      findUnique.mockRejectedValue(new Error('db down'));
+      await expect(
+        service.login({ login: 'alice', password: 'x' }),
+      ).rejects.toThrow('db down');
+      expect(limiter.size()).toBe(1);
+    });
+
+    it('an argon2 failure after acquire keeps the slot counted', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      vi.mocked(verifyPassword).mockRejectedValue(new Error('argon2 failed'));
+      await expect(
+        service.login({ login: 'alice', password: 'x' }),
+      ).rejects.toThrow('argon2 failed');
+      expect(limiter.size()).toBe(1);
+    });
+
+    it('right password of a disabled user: 403 and the counter is reset', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      queryRaw.mockResolvedValue([
+        { password_hash: STORED_HASH, disabled_at: new Date() },
+      ]);
+      for (let i = 0; i < 5; i++) limiter.acquire('alice');
+      await expect(
+        service.login({ login: 'alice', password: 'x' }),
+      ).rejects.toMatchObject({ code: 'user_disabled' });
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('a wrong password keeps its slot', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      vi.mocked(verifyPassword).mockResolvedValue(false);
+      await service.login({ login: 'alice', password: 'x' }).catch(() => {});
+      expect(limiter.size()).toBe(1);
     });
   });
 

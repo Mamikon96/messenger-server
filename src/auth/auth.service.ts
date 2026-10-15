@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
+import { LoginAttemptLimiter } from '../common/login-attempt-limiter.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SessionsService } from '../sessions/sessions.service.js';
@@ -37,6 +38,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionsService,
+    private readonly loginAttempts: LoginAttemptLimiter,
   ) {}
 
   /** `userId` и `csrfToken` — из сессии, уже проверенной `SessionGuard`; повторного поиска сессии нет. */
@@ -88,6 +90,13 @@ export class AuthService {
   }
 
   /**
+   * Порядок: IP-лимит (guard) → тело (pipe) → лимит попыток по логину → поиск в БД → argon2 → транзакция.
+   * Попытка занимает слот до проверки пароля (`acquire`), поэтому ограниченный логин не стоит ни
+   * запроса в БД, ни argon2, а параллельные запросы не обходят лимит; успешная проверка пароля
+   * освобождает слот (`release`). Не по формату §4.1 логин не считается и в карту не попадает
+   * (такого аккаунта нет): фиктивный хэш и `401`. Лимит стоит вне транзакции с `FOR UPDATE`:
+   * счётчик в памяти не должен держать соединение и блокировку.
+   *
    * Пароль проверяется вне транзакции (argon2 не держит соединение и блокировку). Для отсутствующего
    * или не по формату логина считается фиктивный хэш: ответ и время совпадают. Затем под `FOR UPDATE`
    * строки: сменившийся `password_hash` (гонка со сменой пароля) → `401`, отключённый → `403`.
@@ -97,6 +106,7 @@ export class AuthService {
     previousToken?: string,
   ): Promise<SignedIn> {
     const normalized = normalizeLogin(input.login);
+    if (normalized.ok) this.loginAttempts.acquire(normalized.login);
     const found = normalized.ok
       ? await this.prisma.user.findUnique({
           where: { login: normalized.login },
@@ -107,6 +117,7 @@ export class AuthService {
       ? await verifyPassword(input.password, found.passwordHash)
       : await verifyAgainstDummyHash(input.password);
     if (!found || !verified) throw new AppError(401, 'auth_failed');
+    if (normalized.ok) this.loginAttempts.release(normalized.login);
     return this.prisma.$transaction(async (tx) => {
       const locked = await lockUserRow(tx, found.id);
       if (!locked || locked.passwordHash !== found.passwordHash) {
