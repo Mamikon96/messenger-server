@@ -97,4 +97,19 @@ export class SessionsService {
     const { count } = await db.session.deleteMany({ where: { userId } });
     return count;
   }
+
+  /**
+   * Deletes all sessions of the user except the one with `keepToken` (password change, BE-39);
+   * `db` — the caller's transaction client. Returns the number of deleted sessions.
+   */
+  async revokeOtherSessions(
+    userId: string,
+    keepToken: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const { count } = await db.session.deleteMany({
+      where: { userId, id: { not: hashToken(keepToken) } },
+    });
+    return count;
+  }
 }

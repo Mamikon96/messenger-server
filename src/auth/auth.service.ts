@@ -4,6 +4,7 @@ import { LoginAttemptLimiter } from '../common/login-attempt-limiter.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SessionsService } from '../sessions/sessions.service.js';
+import type { ChangePasswordDto } from '../users/dto/change-password.dto.js';
 import { generateName } from '../users/name-generator.js';
 import { composeName } from '../users/user-name.js';
 import type { CredentialsDto } from './dto/credentials.dto.js';
@@ -129,6 +130,50 @@ export class AuthService {
         select: SESSION_USER_SELECT,
       });
       return this.startSession(tx, user, previousToken);
+    });
+  }
+
+  /**
+   * Password change (spec §2.7, BE-39). Order: attempt limit by login (`acquire`, the same counter
+   * as login, BE-D39: a limited request costs no database query and no argon2) -> current password
+   * (argon2, outside the transaction) -> hash of the new one (outside the transaction: the row lock
+   * must not be held during hashing) -> transaction: `FOR UPDATE` of the user row, compare
+   * `password_hash` with the verified one (changed by a concurrent change -> `401 auth_failed`, as in
+   * login), write the hash, delete the other sessions. A wrong current password keeps its slot
+   * (counted), a correct one gives the series back (`release`). The login in the DB always matches
+   * the §4.1 format (CHECK), so it is always counted. The user row is gone or disabled under the
+   * lock -> `401 unauthorized`, the same answer the session guard gives for such a session.
+   * `keepToken` is the current session: it and its `csrfToken` stay valid.
+   */
+  async changePassword(
+    userId: string,
+    keepToken: string,
+    input: ChangePasswordDto,
+  ): Promise<void> {
+    const found = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { login: true, passwordHash: true },
+    });
+    if (!found) throw new AppError(401, 'unauthorized');
+    this.loginAttempts.acquire(found.login);
+    if (!(await verifyPassword(input.currentPassword, found.passwordHash))) {
+      throw new AppError(401, 'auth_failed');
+    }
+    this.loginAttempts.release(found.login);
+    const newHash = await hashPassword(input.newPassword);
+    await this.prisma.$transaction(async (tx) => {
+      const locked = await lockUserRow(tx, userId);
+      if (!locked || locked.disabledAt) {
+        throw new AppError(401, 'unauthorized');
+      }
+      if (locked.passwordHash !== found.passwordHash) {
+        throw new AppError(401, 'auth_failed');
+      }
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: newHash },
+      });
+      await this.sessions.revokeOtherSessions(userId, keepToken, tx);
     });
   }
 
