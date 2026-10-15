@@ -38,6 +38,7 @@
 | `POST /auth/login` | `{login, password}` → `200` `{user: SessionUser, csrfToken}` + cookie `sid`; неверный логин или пароль — `401 auth_failed` (одинаково, фиктивный хэш против тайминга); отключённый после верного пароля — `403 user_disabled`; формат логина и политика пароля не проверяются | 200, 400, 401, 403, 429 |
 | `GET /auth/session` | `{user: {id, login, firstName, lastName, name, avatarUrl}, csrfToken}` — без `provider`, `isAdmin` и `password_hash` | 200, 401 |
 | `POST /auth/logout` | Выход | 204, 401, 403 |
+| `PATCH /me` | `{firstName?, lastName?}` (хотя бы один ключ; после `trim` 1..64 / 0..64 кодовых точек; лишние поля — `400`) → `200` `SessionUser`, `users.name` пересчитывается (BE-D35); WS-событий нет; `400` с `error.details` (BE-D37) | 200, 400, 401, 403 |
 
 При успешном входе или регистрации прежняя cookie-сессия уничтожается. Неудачный вход — `401 auth_failed` (сессия клиента жива); потеря сессии — `401 unauthorized` (BE-D30).
 
