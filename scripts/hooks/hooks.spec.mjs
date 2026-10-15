@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -314,7 +314,6 @@ describe('hooks', () => {
 
     describe('context threshold in a subagent', () => {
       const AGENT = { agent_id: 'a1', agent_type: 'nestjs-reviewer' };
-      const handoff = () => join(dir, '.claude/handoff/nestjs-reviewer.md');
 
       it('denies every tool, including Edit of tasks.md, above the subagent model threshold', () => {
         mainTranscript('claude-opus-5-5', 1000);
@@ -336,23 +335,157 @@ describe('hooks', () => {
         expect(denied(tool('Read', { file_path: join(dir, 'x') }, { ...AGENT, transcript_path: join(dir, SID, 'subagents', 'agent-a1.jsonl') }))).toBe(true);
       });
 
-      it('saves the report of a subagent stopped by the threshold and hands it to the next run of the same type', () => {
-        agentTranscript('a1', 'claude-sonnet-5-5', 95_000);
-        tool('Read', { file_path: join(dir, 'x') }, AGENT);
-        expect(guard({ hook_event_name: 'SubagentStop', ...AGENT, stop_hook_active: false, last_assistant_message: 'Сделано: A. Осталось: B.' }).status).toBe(0);
-        expect(readFileSync(handoff(), 'utf8')).toMatch(/Сделано: A\. Осталось: B\./);
+    });
 
-        expect(out(guard({ hook_event_name: 'SubagentStart', agent_id: 'a3', agent_type: 'Explore' })).hookSpecificOutput).toBeUndefined();
-        const r = guard({ hook_event_name: 'SubagentStart', agent_id: 'a2', agent_type: 'nestjs-reviewer' });
-        expect(out(r).hookSpecificOutput.additionalContext).toMatch(/Сделано: A\. Осталось: B\./);
-        expect(() => readFileSync(handoff())).toThrow();
+    describe('subagent handoff', () => {
+      const TYPE = 'nestjs-reviewer';
+      const HOUR = 3_600_000;
+      const handoffDir = () => join(dir, '.claude/handoff');
+      const handoffPath = (name) => join(handoffDir(), name);
+      const files = () => (existsSync(handoffDir()) ? readdirSync(handoffDir()).sort() : []);
+      const inProgress = (task) => {
+        mkdirSync(join(dir, '.ai/memory'), { recursive: true });
+        const current = task ? `- **${task} (P3)** Текущая задача\n  - Цель: x\n` : '';
+        writeFileSync(join(dir, '.ai/memory/tasks.md'), `# Задачи\n\n## В работе\n${current}\n## Бэклог\n- **BE-46 (P3)** Другая задача\n`);
+      };
+      const stop = (agent_id, report, agent_type = TYPE) => {
+        agentTranscript(agent_id, 'claude-sonnet-5-5', 95_000);
+        tool('Read', { file_path: join(dir, 'x') }, { agent_id, agent_type });
+        expect(guard({ hook_event_name: 'SubagentStop', agent_id, agent_type, stop_hook_active: false, last_assistant_message: report }).status).toBe(0);
+      };
+      const finish = (agent_id, agent_type = TYPE) =>
+        expect(guard({ hook_event_name: 'SubagentStop', agent_id, agent_type, stop_hook_active: false, last_assistant_message: 'готово' }).status).toBe(0);
+      const start = (agent_id, agent_type = TYPE) => out(guard({ hook_event_name: 'SubagentStart', agent_id, agent_type })).hookSpecificOutput?.additionalContext;
+      // Сдвигает время записи отчёта (в шапке) и mtime файла на hours часов назад.
+      const backdate = (name, hours) => {
+        const file = handoffPath(name);
+        const at = new Date(Date.now() - hours * HOUR);
+        writeFileSync(file, readFileSync(file, 'utf8').replace(/written=\S+/, `written=${at.toISOString()}`));
+        utimesSync(file, at, at);
+      };
+      // Сдвигает только mtime (для `_active` — время захвата).
+      const touch = (file, hours) => {
+        const at = new Date(Date.now() - hours * HOUR);
+        utimesSync(file, at, at);
+      };
+
+      beforeEach(() => inProgress('BE-49'));
+
+      it('writes one file per stopped agent with the time and the task in progress in the header', () => {
+        stop('a1', 'Сделано: A1.');
+        stop('a2', 'Сделано: A2.');
+        expect(files()).toEqual([`${TYPE}-a1.md`, `${TYPE}-a2.md`]);
+        const text = readFileSync(handoffPath(`${TYPE}-a1.md`), 'utf8');
+        expect(text).toMatch(/Сделано: A1\./);
+        expect(text).toMatch(/BE-49/);
+        expect(text).toMatch(/\d{4}-\d\d-\d\dT\d\d:\d\d/);
+        expect(readFileSync(handoffPath(`${TYPE}-a2.md`), 'utf8')).toMatch(/Сделано: A2\./);
       });
 
       it('does not save a report of a subagent that finished normally', () => {
         agentTranscript('a1', 'claude-sonnet-5-5', 1000);
-        tool('Read', { file_path: join(dir, 'x') }, AGENT);
-        expect(guard({ hook_event_name: 'SubagentStop', ...AGENT, stop_hook_active: false, last_assistant_message: 'готово' }).status).toBe(0);
-        expect(() => readFileSync(handoff())).toThrow();
+        tool('Read', { file_path: join(dir, 'x') }, { agent_id: 'a1', agent_type: TYPE });
+        finish('a1');
+        expect(files()).toEqual([]);
+      });
+
+      it('hands the oldest free report of the same type to a new run, marks it _active and never hands it out twice', () => {
+        stop('a1', 'Сделано: A1.');
+        stop('a2', 'Сделано: A2.');
+        backdate(`${TYPE}-a1.md`, 1);
+
+        expect(start('x1', 'Explore')).toBeUndefined();
+        expect(start('x2', 'nestjs')).toBeUndefined();
+        expect(start('b1')).toMatch(/Сделано: A1\./);
+        expect(files()).toEqual([`${TYPE}-a1_active-b1.md`, `${TYPE}-a2.md`]);
+        expect(start('b2')).toMatch(/Сделано: A2\./);
+        expect(start('b3')).toBeUndefined();
+        expect(files()).toEqual([`${TYPE}-a1_active-b1.md`, `${TYPE}-a2_active-b2.md`]);
+      });
+
+      it('does not hand out a report of another task or one without a task to a run with a task', () => {
+        stop('a1', 'Сделано: A1.');
+        inProgress('BE-47');
+        expect(start('b1')).toBeUndefined();
+        inProgress('');
+        expect(start('b2')).toBeUndefined();
+        expect(files()).toEqual([`${TYPE}-a1.md`]);
+      });
+
+      it('hands a report without a task only to a run without a task', () => {
+        inProgress('');
+        stop('a1', 'Сделано: A1.');
+        inProgress('BE-49');
+        expect(start('b1')).toBeUndefined();
+        inProgress('');
+        expect(start('b2')).toMatch(/Сделано: A1\./);
+      });
+
+      it('does not hand out a report older than 24 hours and deletes it', () => {
+        stop('a1', 'Сделано: A1.');
+        backdate(`${TYPE}-a1.md`, 25);
+        expect(start('b1')).toBeUndefined();
+        expect(files()).toEqual([]);
+      });
+
+      it('deletes the owner _active file when the owner finishes normally and leaves other files alone', () => {
+        stop('a1', 'Сделано: A1.');
+        stop('a2', 'Сделано: A2.');
+        backdate(`${TYPE}-a1.md`, 1);
+        start('b1');
+        finish('b1');
+        expect(files()).toEqual([`${TYPE}-a2.md`]);
+      });
+
+      it('replaces the owner _active file with a new report when the owner is stopped by the threshold again', () => {
+        stop('a1', 'Сделано: A1.');
+        start('b1');
+        stop('b1', 'Сделано: B1.');
+        expect(files()).toEqual([`${TYPE}-b1.md`]);
+        expect(readFileSync(handoffPath(`${TYPE}-b1.md`), 'utf8')).toMatch(/Сделано: B1\./);
+      });
+
+      it('returns an _active file claimed more than 2 hours ago to the queue while the report is younger than 24 hours', () => {
+        stop('a1', 'Сделано: A1.');
+        start('b1');
+        touch(handoffPath(`${TYPE}-a1_active-b1.md`), 1);
+        expect(start('b2')).toBeUndefined();
+        touch(handoffPath(`${TYPE}-a1_active-b1.md`), 3);
+        expect(start('b3')).toMatch(/Сделано: A1\./);
+        expect(files()).toEqual([`${TYPE}-a1_active-b3.md`]);
+      });
+
+      it('deletes an abandoned _active file and old free reports at session start once the report is older than 24 hours', () => {
+        stop('a1', 'Сделано: A1.');
+        stop('a2', 'Сделано: A2.');
+        stop('a3', 'Сделано: A3.');
+        start('b1');
+        backdate(`${TYPE}-a1_active-b1.md`, 25);
+        backdate(`${TYPE}-a2.md`, 25);
+        expect(guard({ hook_event_name: 'SessionStart', source: 'startup' }).status).toBe(0);
+        expect(files()).toEqual([`${TYPE}-a3.md`]);
+      });
+
+      it('never hands out a file of the old format and deletes it 24 hours after its mtime', () => {
+        mkdirSync(handoffDir(), { recursive: true });
+        writeFileSync(handoffPath(`${TYPE}.md`), '# Handoff старого формата\n');
+        expect(start('b1')).toBeUndefined();
+        expect(start('b2', '')).toBeUndefined();
+        expect(files()).toEqual([`${TYPE}.md`]);
+        touch(handoffPath(`${TYPE}.md`), 25);
+        expect(guard({ hook_event_name: 'SessionStart', source: 'startup' }).status).toBe(0);
+        expect(files()).toEqual([]);
+      });
+
+      it('deletes agent-*.stopped markers older than 24 hours at session start', () => {
+        const guardDir = join(dir, 'guard');
+        mkdirSync(guardDir, { recursive: true });
+        writeFileSync(join(guardDir, 'agent-old.stopped'), '');
+        writeFileSync(join(guardDir, 'agent-new.stopped'), '');
+        touch(join(guardDir, 'agent-old.stopped'), 25);
+        expect(guard({ hook_event_name: 'SessionStart', source: 'startup' }).status).toBe(0);
+        expect(existsSync(join(guardDir, 'agent-old.stopped'))).toBe(false);
+        expect(existsSync(join(guardDir, 'agent-new.stopped'))).toBe(true);
       });
     });
   });

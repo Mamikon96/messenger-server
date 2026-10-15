@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Гигиена сессий (SH-D19, BE-48). Один скрипт на события SessionStart, UserPromptSubmit, PreToolUse, SubagentStart, SubagentStop:
+// Гигиена сессий (SH-D19, BE-48; handoff — SH-D20, BE-49). Один скрипт на события SessionStart, UserPromptSubmit, PreToolUse, SubagentStart, SubagentStop:
 // - задача ушла в архив в этой сессии — следующий промпт блокируется с требованием /clear;
 // - контекст последнего ответа больше порога модели — главная сессия останавливается (промпт блокируется, инструменты запрещены,
 //   кроме записи «Осталось» и проверки памяти), субагент теряет инструменты и возвращает отчёт, который сохраняется в handoff;
 // - префикс `!continue` пропускает промпт и снимает запрет инструментов до следующего промпта.
-// Состояние сессий — во временном каталоге вне репозитория (SESSION_GUARD_DIR), handoff — в .claude/handoff/ (в .gitignore).
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
+// Состояние сессий — во временном каталоге вне репозитория (SESSION_GUARD_DIR), handoff — в .claude/handoff/ (в .gitignore): файл на остановленного агента, захват переименованием в `_active`, срок 24 ч.
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 const TAIL_BYTES = 512 * 1024;
 const MAX_TAIL_BYTES = 64 * 1024 * 1024;
 const BYPASS = '!continue';
+const HANDOFF_TTL = 24 * 3_600_000;
+const CLAIM_TTL = 2 * 3_600_000;
 
 let input;
 try {
@@ -87,6 +89,68 @@ const overLimit = (file) => {
 
 const describe = (ctx) => `контекст ${ctx.tokens} токенов больше порога ${ctx.limit} (${ctx.model})`;
 
+// Задача из «В работе» tasks.md (BE-NN) или пустая строка.
+const taskInProgress = () => {
+  try {
+    const text = readFileSync(join(root, '.ai/memory/tasks.md'), 'utf8');
+    const start = text.indexOf('## В работе');
+    if (start < 0) return '';
+    const section = text.slice(start).split(/^## (?!В работе)/m)[0];
+    return section.match(/^- \*\*(BE-\d+)/m)?.[1] ?? '';
+  } catch {
+    return '';
+  }
+};
+
+// Файлы handoff (SH-D20): свободный `<type>-<agent_id>.md`, захваченный `<type>-<agent_id>_active-<owner>.md`.
+// Тип, задача и время записи — из строки метаданных; у файла без неё (старый формат) время записи — mtime, тип и задача пустые.
+const handoffs = () => {
+  if (!existsSync(handoffDir)) return [];
+  return readdirSync(handoffDir)
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => {
+      const file = join(handoffDir, name);
+      const [, base, owner] = name.match(/^(.*?)(?:_active-([\w.-]+))?\.md$/);
+      let meta = {};
+      let mtime = 0;
+      try {
+        mtime = statSync(file).mtimeMs;
+        const m = readFileSync(file, 'utf8').match(/^<!-- handoff type=(\S*) task=(\S*) written=(\S+) -->/);
+        if (m) meta = { type: m[1], task: m[2], written: Date.parse(m[3]) };
+      } catch {
+        return undefined;
+      }
+      return { file, base, owner, mtime, type: meta.type ?? '', task: meta.task ?? '', written: Number.isFinite(meta.written) ? meta.written : mtime };
+    })
+    .filter(Boolean);
+};
+
+// Уборка: отчёты старше суток удаляются; `_active`, захваченный больше CLAIM_TTL назад, возвращается в очередь;
+// маркеры остановленных субагентов старше суток удаляются (субагент мог быть убит без SubagentStop).
+const sweep = () => {
+  const now = Date.now();
+  for (const h of handoffs()) {
+    if (now - h.written >= HANDOFF_TTL) rmSync(h.file, { force: true });
+    else if (h.owner && now - h.mtime > CLAIM_TTL) {
+      try {
+        renameSync(h.file, join(handoffDir, `${h.base}.md`));
+      } catch {
+        // файл уже забрал или удалил другой процесс
+      }
+    }
+  }
+  if (!existsSync(stateDir)) return;
+  for (const name of readdirSync(stateDir)) {
+    if (!/^agent-.*\.stopped$/.test(name)) continue;
+    const file = join(stateDir, name);
+    try {
+      if (now - statSync(file).mtimeMs >= HANDOFF_TTL) rmSync(file, { force: true });
+    } catch {
+      // уже удалён
+    }
+  }
+};
+
 const deny = (reason, systemMessage) =>
   emit({ ...(systemMessage && { systemMessage }), hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
 
@@ -108,6 +172,7 @@ try {
         mkdirSync(stateDir, { recursive: true });
         writeFileSync(snap, firstArchiveEntry());
       }
+      sweep();
       break;
     }
     case 'UserPromptSubmit': {
@@ -148,22 +213,43 @@ try {
       break;
     }
     case 'SubagentStop': {
+      const owned = handoffs().find((h) => h.owner === safe(input.agent_id));
       const marker = statePath(`agent-${input.agent_id}.stopped`);
-      if (!existsSync(marker)) break;
-      rmSync(marker, { force: true });
-      mkdirSync(handoffDir, { recursive: true });
-      writeFileSync(
-        join(handoffDir, `${safe(input.agent_type)}.md`),
-        `# Handoff ${input.agent_type} (${new Date().toISOString()})\nПрошлый запуск остановлен по порогу контекста. Его отчёт:\n\n${input.last_assistant_message ?? ''}\n`,
-      );
+      if (existsSync(marker)) {
+        rmSync(marker, { force: true });
+        const written = new Date().toISOString();
+        const task = taskInProgress();
+        mkdirSync(handoffDir, { recursive: true });
+        writeFileSync(
+          join(handoffDir, `${safe(input.agent_type)}-${safe(input.agent_id)}.md`),
+          `<!-- handoff type=${safe(input.agent_type)} task=${task} written=${written} -->\n# Handoff ${input.agent_type} · ${written} · ${task || 'без задачи'}\nПрошлый запуск остановлен по порогу контекста. Его отчёт:\n\n${input.last_assistant_message ?? ''}\n`,
+        );
+      }
+      if (owned) rmSync(owned.file, { force: true });
       break;
     }
     case 'SubagentStart': {
-      const file = join(handoffDir, `${safe(input.agent_type)}.md`);
-      if (!existsSync(file)) break;
-      const text = readFileSync(file, 'utf8');
-      rmSync(file, { force: true });
-      emit({ hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: `Продолжение прерванной работы — начни с этого, не повторяй сделанное:\n${text}` } });
+      sweep();
+      const type = safe(input.agent_type);
+      if (!type) break;
+      const task = taskInProgress();
+      const now = Date.now();
+      const candidates = handoffs()
+        .filter((h) => !h.owner && h.type === type && h.task === task && now - h.written < HANDOFF_TTL)
+        .sort((a, b) => a.written - b.written);
+      for (const h of candidates) {
+        const claimed = join(handoffDir, `${h.base}_active-${safe(input.agent_id)}.md`);
+        try {
+          renameSync(h.file, claimed); // атомарно: параллельный запуск получит ENOENT и возьмёт следующий файл
+        } catch {
+          continue;
+        }
+        const at = new Date();
+        utimesSync(claimed, at, at); // mtime `_active` — время захвата
+        const text = readFileSync(claimed, 'utf8');
+        emit({ hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: `Продолжение прерванной работы — начни с этого, не повторяй сделанное:\n${text}` } });
+        break;
+      }
       break;
     }
   }
