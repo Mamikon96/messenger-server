@@ -20,6 +20,8 @@ const sidOf = (res: request.Response): string | undefined =>
     c.startsWith('sid='),
   );
 
+const req = (field: string) => ({ field, code: 'required' });
+
 describe('Auth (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -213,33 +215,102 @@ describe('Auth (e2e)', () => {
       expect(await sessionStatus(old.cookie)).toBe(200);
     });
 
-    const invalid: [string, unknown][] = [
-      ['no body', undefined],
-      ['empty object', {}],
-      ['array body', []],
-      ['missing password', { login: 'alice' }],
-      ['missing login', { password: NEW_PASSWORD }],
-      ['empty login', { login: '   ', password: NEW_PASSWORD }],
-      ['numeric login', { login: 5, password: NEW_PASSWORD }],
-      ['null password', { login: 'alice', password: null }],
-      ['login with a space', { login: 'al ice', password: NEW_PASSWORD }],
-      ['login too short', { login: 'ab', password: NEW_PASSWORD }],
-      ['login too long', { login: 'a'.repeat(33), password: NEW_PASSWORD }],
-      ['login with é', { login: 'café', password: NEW_PASSWORD }],
-      ['password too short', { login: 'alice', password: 'short-pass' }],
-      ['password too long', { login: 'alice', password: 'x'.repeat(257) }],
+    type Detail = { field: string; code: string };
+    const invalid: [string, unknown, Detail[]][] = [
+      ['no body', undefined, [req('login'), req('password')]],
+      ['empty object', {}, [req('login'), req('password')]],
+      ['missing password', { login: 'alice' }, [req('password')]],
+      ['missing login', { password: NEW_PASSWORD }, [req('login')]],
+      ['empty login', { login: '   ', password: NEW_PASSWORD }, [req('login')]],
+      ['numeric login', { login: 5, password: NEW_PASSWORD }, [req('login')]],
+      ['null password', { login: 'alice', password: null }, [req('password')]],
+      ['empty password', { login: 'alice', password: '' }, [req('password')]],
+      [
+        'login with a space',
+        { login: 'al ice', password: NEW_PASSWORD },
+        [{ field: 'login', code: 'invalid_format' }],
+      ],
+      [
+        'login too short',
+        { login: 'ab', password: NEW_PASSWORD },
+        [{ field: 'login', code: 'invalid_format' }],
+      ],
+      [
+        'login too long',
+        { login: 'a'.repeat(33), password: NEW_PASSWORD },
+        [{ field: 'login', code: 'too_long' }],
+      ],
+      [
+        'login too long and with a bad character',
+        { login: `é${'a'.repeat(40)}`, password: NEW_PASSWORD },
+        [{ field: 'login', code: 'too_long' }],
+      ],
+      [
+        'login with é',
+        { login: 'café', password: NEW_PASSWORD },
+        [{ field: 'login', code: 'invalid_format' }],
+      ],
+      [
+        'password too short',
+        { login: 'alice', password: 'short-pass' },
+        [{ field: 'password', code: 'too_short' }],
+      ],
+      [
+        'password too long',
+        { login: 'alice', password: 'x'.repeat(257) },
+        [{ field: 'password', code: 'too_long' }],
+      ],
       [
         'password of 129 two-byte chars',
         { login: 'alice', password: 'é'.repeat(129) },
+        [{ field: 'password', code: 'too_long' }],
       ],
-      ['common password', { login: 'alice', password: 'Password1234' }],
+      [
+        'common password',
+        { login: 'alice', password: 'Password1234' },
+        [{ field: 'password', code: 'too_common' }],
+      ],
+      [
+        'both fields invalid: one code per field',
+        { login: 'a b', password: 'x' },
+        [
+          { field: 'login', code: 'invalid_format' },
+          { field: 'password', code: 'too_short' },
+        ],
+      ],
     ];
-    it.each(invalid)('400 validation_failed: %s', async (_name, body) => {
-      const res = await register(body).expect(400);
-      expect(res.body.error.code).toBe('validation_failed');
-      expect(res.body.error.details).toBeUndefined();
-      expect(await prisma.user.count()).toBe(0);
-    });
+    it.each(invalid)(
+      '400 validation_failed with details: %s',
+      async (_name, body, details) => {
+        const res = await register(body).expect(400);
+        expect(res.body.error.code).toBe('validation_failed');
+        expect(res.body.error.details).toEqual(details);
+        expect(typeof res.body.error.message).toBe('string');
+        expect(await prisma.user.count()).toBe(0);
+      },
+    );
+
+    const noDetails: [string, string][] = [
+      ['array body', '[]'],
+      ['string body', '"x"'],
+      ['number body', '5'],
+      ['null body', 'null'],
+      ['broken JSON', '{"login":'],
+    ];
+    it.each(noDetails)(
+      '400 validation_failed without details: %s',
+      async (_name, raw) => {
+        const res = await http()
+          .post('/api/auth/register')
+          .set('Origin', ORIGIN)
+          .set('Content-Type', 'application/json')
+          .send(raw)
+          .expect(400);
+        expect(res.body.error.code).toBe('validation_failed');
+        expect(res.body.error).not.toHaveProperty('details');
+        expect(await prisma.user.count()).toBe(0);
+      },
+    );
 
     it('accepts a 256-byte password and 12-byte password', async () => {
       await register({ login: 'long-one', password: 'x'.repeat(256) }).expect(
@@ -321,21 +392,43 @@ describe('Auth (e2e)', () => {
       await login({ login: 'a'.repeat(5000), password: 'x' }).expect(401);
     });
 
-    const invalid: [string, unknown][] = [
-      ['no body', undefined],
-      ['empty object', {}],
-      ['array body', []],
-      ['missing password', { login: 'alice' }],
-      ['empty password', { login: 'alice', password: '' }],
-      ['missing login', { password: 'x' }],
-      ['blank login', { login: '  ', password: 'x' }],
-      ['numeric login', { login: 5, password: 'x' }],
-      ['array password', { login: 'alice', password: ['x'] }],
+    const invalid: [string, unknown, string[]][] = [
+      ['no body', undefined, ['login', 'password']],
+      ['empty object', {}, ['login', 'password']],
+      ['missing password', { login: 'alice' }, ['password']],
+      ['empty password', { login: 'alice', password: '' }, ['password']],
+      ['missing login', { password: 'x' }, ['login']],
+      ['blank login', { login: '  ', password: 'x' }, ['login']],
+      ['numeric login', { login: 5, password: 'x' }, ['login']],
+      ['array password', { login: 'alice', password: ['x'] }, ['password']],
+      ['null login', { login: null, password: 'x' }, ['login']],
     ];
-    it.each(invalid)('400 validation_failed: %s', async (_name, body) => {
-      const res = await login(body).expect(400);
+    it.each(invalid)(
+      '400 validation_failed with details: %s',
+      async (_name, body, fields) => {
+        const res = await login(body).expect(400);
+        expect(res.body.error.code).toBe('validation_failed');
+        expect(res.body.error.details).toEqual(
+          fields.map((field) => req(field)),
+        );
+        expect(typeof res.body.error.message).toBe('string');
+      },
+    );
+
+    it.each([
+      ['array body', '[]'],
+      ['string body', '"x"'],
+      ['null body', 'null'],
+      ['broken JSON', '{"login":'],
+    ])('400 validation_failed without details: %s', async (_name, raw) => {
+      const res = await http()
+        .post('/api/auth/login')
+        .set('Origin', ORIGIN)
+        .set('Content-Type', 'application/json')
+        .send(raw)
+        .expect(400);
       expect(res.body.error.code).toBe('validation_failed');
-      expect(res.body.error.details).toBeUndefined();
+      expect(res.body.error).not.toHaveProperty('details');
     });
 
     it('403 user_disabled only after the right password; a wrong password stays 401', async () => {

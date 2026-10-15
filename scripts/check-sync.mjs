@@ -99,7 +99,7 @@ export function runChecks(root) {
 
   // ---------- 2. Коды ошибок ----------
   const errText = srcText('src/common/app-error.ts');
-  const errorCodes = new Set([...errText.slice(errText.indexOf('ErrorCode')).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
+  const errorCodes = new Set([...(errText.match(/export type ErrorCode =([^;]*);/)?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
   if (!errorCodes.size) fail('src/common/app-error.ts: не найден тип ErrorCode');
   const jsonCodes = errorCodes;
   const clientCodes = new Set();
@@ -109,6 +109,15 @@ export function runChecks(root) {
   const specCodesLine = spec.match(/Коды `error\.code`:([^;\n]*);/);
   if (!specCodesLine) fail(`${SPEC}: нет строки «Коды \`error.code\`: … ;»`);
   else sameSet('коды error.code', SPEC, new Set(ticks(specCodesLine[1])), jsonCodes);
+
+  // Коды error.details[].code: тип ValidationCode в коде против таблицы подраздела «Коды details» §1.3.
+  const detailCodes = new Set(
+    [...(errText.match(/export type ValidationCode =([^;]*);/)?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]),
+  );
+  if (!detailCodes.size) fail('src/common/app-error.ts: не найден тип ValidationCode');
+  const secDetails = client.split(/^#### Коды details/m)[1]?.split(/^#/m)[0] ?? '';
+  const clientDetailCodes = new Set([...secDetails.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]));
+  sameSet('коды error.details[].code', CLIENT, clientDetailCodes, detailCodes);
 
   // ---------- 3. Переменные окружения ----------
   const envSchema = srcText('src/config/env.schema.ts');

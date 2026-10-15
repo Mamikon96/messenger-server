@@ -222,6 +222,7 @@ describe('Chats (e2e)', () => {
       const res = await createChat(me, body);
       expect(res.status, JSON.stringify(body).slice(0, 80)).toBe(400);
       expect(res.body.error.code).toBe('validation_failed');
+      expect(res.body.error).not.toHaveProperty('details');
     }
     // Граница: ровно title из 100 символов допустим.
     await createChat(me, {

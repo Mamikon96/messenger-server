@@ -21,6 +21,28 @@ describe('AppExceptionFilter', () => {
     });
   });
 
+  it('renders AppError details when present', () => {
+    const { json } = run(
+      new AppError(400, 'validation_failed', 'msg', {
+        details: [{ field: 'login', code: 'required' }],
+      }),
+    );
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        code: 'validation_failed',
+        message: 'msg',
+        details: [{ field: 'login', code: 'required' }],
+      },
+    });
+  });
+
+  it('omits empty details', () => {
+    const { json } = run(
+      new AppError(400, 'validation_failed', 'msg', { details: [] }),
+    );
+    expect(json.mock.calls[0][0].error).not.toHaveProperty('details');
+  });
+
   it('renders unknown errors as 500 internal_error without leaking details', () => {
     const { status, json } = run(new Error('db password is hunter2'));
     expect(status).toHaveBeenCalledWith(500);

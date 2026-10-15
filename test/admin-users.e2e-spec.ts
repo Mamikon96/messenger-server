@@ -129,6 +129,7 @@ describe('Admin users (e2e)', () => {
     ]) {
       const res = await patch(admin, bob.userId, body).expect(400);
       expect(res.body.error.code).toBe('validation_failed');
+      expect(res.body.error).not.toHaveProperty('details');
     }
     await patch(admin, 'nope', { disabled: true }).expect(400);
   });
