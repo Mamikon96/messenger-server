@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-15 @ 5f51ed8+dirty
+> Проверено: 2026-10-15 @ 24390c3+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -16,7 +16,7 @@
   - Вне рамок: handoff главной сессии, хранение handoff в git.
   - Затрагивает: `scripts/hooks/session-guard.mjs`, `scripts/hooks/hooks.spec.mjs`, `.ai/rules/workflow.md` §5; контракт API: нет; схема БД: нет.
   - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: тесты (`hooks.spec.mjs`, describe «subagent handoff») и реализация (`session-guard.mjs`: `taskInProgress`, `handoffs`, `sweep`) готовы, `workflow.md` §5 обновлён, `check-fast.sh` зелёный → коммит → `accept.sh` → `nestjs-reviewer` → PR.
+  - Осталось: ревью 1 — APPROVE WITH FIXES (4 MINOR: гонка utimes/rename при захвате, сбой чтения после захвата, неизолированный sweep, отчёт без типа; NIT — нет теста параллельности) исправлены → `accept.sh` → повторное ревью `nestjs-reviewer` по дельте → PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).

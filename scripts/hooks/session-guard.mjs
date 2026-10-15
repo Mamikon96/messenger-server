@@ -151,6 +151,15 @@ const sweep = () => {
   }
 };
 
+// Сбой уборки не должен мешать остальной обработке события.
+const safeSweep = () => {
+  try {
+    sweep();
+  } catch {
+    // уборка повторится на следующем событии
+  }
+};
+
 const deny = (reason, systemMessage) =>
   emit({ ...(systemMessage && { systemMessage }), hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
 
@@ -172,7 +181,7 @@ try {
         mkdirSync(stateDir, { recursive: true });
         writeFileSync(snap, firstArchiveEntry());
       }
-      sweep();
+      safeSweep();
       break;
     }
     case 'UserPromptSubmit': {
@@ -215,8 +224,10 @@ try {
     case 'SubagentStop': {
       const owned = handoffs().find((h) => h.owner === safe(input.agent_id));
       const marker = statePath(`agent-${input.agent_id}.stopped`);
-      if (existsSync(marker)) {
-        rmSync(marker, { force: true });
+      const stopped = existsSync(marker);
+      rmSync(marker, { force: true });
+      // Без типа отчёт никому не выдать — не пишем.
+      if (stopped && safe(input.agent_type)) {
         const written = new Date().toISOString();
         const task = taskInProgress();
         mkdirSync(handoffDir, { recursive: true });
@@ -229,7 +240,7 @@ try {
       break;
     }
     case 'SubagentStart': {
-      sweep();
+      safeSweep();
       const type = safe(input.agent_type);
       if (!type) break;
       const task = taskInProgress();
@@ -240,13 +251,25 @@ try {
       for (const h of candidates) {
         const claimed = join(handoffDir, `${h.base}_active-${safe(input.agent_id)}.md`);
         try {
+          // mtime `_active` — время захвата. Ставится до rename (rename его сохраняет): иначе параллельный sweep
+          // успел бы увидеть свежий `_active` со старым mtime и вернуть его в очередь.
+          const at = new Date();
+          utimesSync(h.file, at, at);
           renameSync(h.file, claimed); // атомарно: параллельный запуск получит ENOENT и возьмёт следующий файл
         } catch {
           continue;
         }
-        const at = new Date();
-        utimesSync(claimed, at, at); // mtime `_active` — время захвата
-        const text = readFileSync(claimed, 'utf8');
+        let text;
+        try {
+          text = readFileSync(claimed, 'utf8');
+        } catch {
+          try {
+            renameSync(claimed, h.file); // не удалось прочитать — вернуть отчёт в очередь
+          } catch {
+            // файл уже убран другим процессом
+          }
+          continue;
+        }
         emit({ hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: `Продолжение прерванной работы — начни с этого, не повторяй сделанное:\n${text}` } });
         break;
       }

@@ -466,6 +466,26 @@ describe('hooks', () => {
         expect(files()).toEqual([`${TYPE}-a3.md`]);
       });
 
+      it('marks a claimed old report with the claim time so a sweep right after the claim keeps it _active', () => {
+        stop('a1', 'Сделано: A1.');
+        backdate(`${TYPE}-a1.md`, 3);
+        expect(start('b1')).toMatch(/Сделано: A1\./);
+        expect(guard({ hook_event_name: 'SessionStart', source: 'startup' }).status).toBe(0);
+        expect(files()).toEqual([`${TYPE}-a1_active-b1.md`]);
+      });
+
+      it('still hands out a report when the sweep fails', () => {
+        stop('a1', 'Сделано: A1.');
+        rmSync(join(dir, 'guard'), { recursive: true, force: true });
+        writeFileSync(join(dir, 'guard'), 'не каталог');
+        expect(start('b1')).toMatch(/Сделано: A1\./);
+      });
+
+      it('does not write a report of a stopped subagent without a type', () => {
+        stop('a1', 'Сделано: A1.', '');
+        expect(files()).toEqual([]);
+      });
+
       it('never hands out a file of the old format and deletes it 24 hours after its mtime', () => {
         mkdirSync(handoffDir(), { recursive: true });
         writeFileSync(handoffPath(`${TYPE}.md`), '# Handoff старого формата\n');
