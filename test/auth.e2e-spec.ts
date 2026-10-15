@@ -647,7 +647,8 @@ describe('Auth rate limit on the full AppModule (e2e)', () => {
   });
 });
 
-describe('Login attempt limit per login (e2e)', () => {
+// every failed login runs a deliberately slow argon2 (dummy) hash, tests with ~10-20 attempts need a long timeout
+describe('Login attempt limit per login (e2e)', { timeout: 30_000 }, () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const WRONG = 'wrong password!!';
@@ -722,7 +723,8 @@ describe('Login attempt limit per login (e2e)', () => {
   it('a login that violates the format is never counted: always 401 auth_failed', async () => {
     const tooLong = 'x'.repeat(33);
     for (const bad of [tooLong, 'bad login', 'ab', 'café-user']) {
-      for (let i = 0; i < 12; i++) {
+      // the limit is 10: the 11th attempt proves that the login is not counted
+      for (let i = 0; i < 11; i++) {
         const res = await login({ login: bad, password: WRONG }).expect(401);
         expect(res.body.error.code).toBe('auth_failed');
       }
