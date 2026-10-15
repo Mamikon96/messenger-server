@@ -1,5 +1,5 @@
 # Состояние backend
-> Проверено: 2026-10-15 @ 24390c3+dirty
+> Проверено: 2026-10-15 @ 32da22a+dirty
 
 ## Общее
 NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Админка пользователей (`users.disabled_at`, BE-21). Вход по passkeys, инвайты и CLI `admin:invite` удалены (BE-32, BE-33; SH-D18, BE-D38): вход и регистрация по логину и паролю — `POST /api/auth/register` и `POST /api/auth/login` (BE-44), e2e создают пользователей и сессии через `loginAs` (заранее вычисленный хэш пароля). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
@@ -12,8 +12,8 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза
 1. Лимит сообщений (`src/messages/message-rate-limiter.ts`) хранится в памяти процесса: сбрасывается при рестарте, на несколько процессов не рассчитан (BE-D20). Лимит публичных эндпоинтов входа (`src/common/sliding-window-limiter.ts`, `AUTH_RATE_PER_MINUTE` по IP) — тоже в памяти; за прокси нужен `TRUST_PROXY=1` (BE-D28, BE-D30). `isAdmin` в теле сессии нет (BE-06).
 
 ## Последняя приёмка
-Автоприёмка (пишет scripts/accept.sh): код 0 · 2026-10-15 · unit 444/444 · e2e 298/298
-Ревью: BE-39 — nestjs-reviewer APPROVE (1 раунд)
+Автоприёмка (пишет scripts/accept.sh): код 0 · 2026-10-15 · unit 447/447 · e2e 298/298
+Ревью: BE-49 — nestjs-reviewer APPROVE (2 раунда)
 
 ## Зависимости от другой стороны
 Клиент переходит на вход по логину/паролю (BE-22, спека `docs/auth-password-spec.md`, у клиента копия): его `auth-contract.md` устарел (OAuth). Копию спеки у клиента синхронизировать после BE-31 (§4.3, BE-D36).
