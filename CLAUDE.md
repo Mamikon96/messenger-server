@@ -37,7 +37,7 @@ Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + 
 | Правка структуры памяти и харнеса | `.ai/memory/README.md`, `scripts/check-memory.sh`, `scripts/check-sync.mjs` |
 
 ## Неснимаемые правила (детали — в файлах выше)
-1. **Память:** после ЛЮБЫХ изменений, до ответа пользователю, актуализируй `tasks.md` (+ `state.md`, штамп) и запусти `bash scripts/check-memory.sh` (Stop-hook не даст закончить ответ, пока проверка красная). Протокол — `.ai/rules/memory-protocol.md`.
+1. **Память:** после ЛЮБЫХ изменений, до ответа пользователю, актуализируй `tasks.md` (+ `state.md`) и запусти `bash scripts/check-memory.sh` — штамп «Проверено» она пишет сама (Stop-hook не даст закончить ответ, пока проверка красная). Сессия выше порога контекста или после закрытия задачи останавливается hook'ом с требованием `/clear` (`.ai/rules/workflow.md` §5). Протокол — `.ai/rules/memory-protocol.md`.
 2. **Исследование и планирование:** к анализу подключается `system-analyst` (запускает основная сессия; дубли, контракт, БД, масштабирование). См. `.ai/rules/research-planning.md`.
 3. **Новые технологии/подходы** — только после опроса пользователя (`AskUserQuestion`); сразу после его выбора решение (что, почему, альтернативы) записывается в `decisions.md` — для вариантов от `solution-architect` это делает он; агенты читают `decisions.md`, а не изобретают заново. См. `.ai/rules/tech-approval.md`.
 4. **Приёмка:** закрытие задачи (запись в `.ai/memory/tasks-archive.md`) только при `bash scripts/accept.sh` = 0 **и** APPROVE от `nestjs-reviewer`; ревью запускает основная сессия. См. `.ai/rules/acceptance.md`.
