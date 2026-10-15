@@ -1,12 +1,12 @@
 # Архитектура backend
-> Проверено: 2026-10-14 @ fe74e73+dirty
+> Проверено: 2026-10-15 @ d22da56+dirty
 
 Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/superpowers/specs/2026-10-05-core-contract-design.md`). Целевые слои и соглашения — `product-agreements.md`.
 
 ## Модули (`src/`)
 - `config/` — `parseEnv` (zod) и глобальный `ConfigService`; переменные — `.env.example`.
 - `prisma/` — глобальный `PrismaService` (Prisma 7 + `@prisma/adapter-pg`); клиент генерируется в `src/generated/` (не в git, `npm run db:generate`).
-- `common/` — `AppError`/`ErrorCode`/`ValidationCode` (необязательное `details: {field, code}[]` у `400`, BE-41), `AppExceptionFilter` (формат `{error:{code,message,details?}}`), `ZodValidationPipe` (опция `details: true` — только для auth) и `validation-details.ts` (issues zod → `details`), `OriginGuard` (публичные POST: `Origin` из `ALLOWED_ORIGINS`), `AuthRateLimitGuard` + `SlidingWindowLimiter` (бакет на IP, `AUTH_RATE_PER_MINUTE`, BE-D28).
+- `common/` — `AppError`/`ErrorCode`/`ValidationCode` (необязательное `details: {field, code}[]` у `400`, BE-41), `AppExceptionFilter` (формат `{error:{code,message,details?}}`), `ZodValidationPipe` (опция `details: true` — только для auth) и `validation-details.ts` (issues zod → `details`), `OriginGuard` (публичные POST: `Origin` из `ALLOWED_ORIGINS`), `AuthRateLimitGuard` + `SlidingWindowLimiter` (бакет на IP, `AUTH_RATE_PER_MINUTE`, BE-D28), `LoginAttemptLimiter` (singleton в `CommonModule`: 10 попыток входа на нормализованный логин за 15 минут, `429` + `Retry-After`; `acquire` до поиска в БД и argon2, `release` после верного пароля; не по формату логины не считаются; BE-40, BE-D34, BE-D35, BE-D39).
 - `sessions/` — `SessionsService` (токен 32 байта, в БД sha256; `create(userId, tx?)`, `revokeAllForUser`; сессии отключённых не возвращаются), `SessionGuard`, `CsrfGuard`, `parseCookies`.
 - `auth/` — `AuthController` (`POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/session`, `POST /api/auth/logout`), `AuthService` (регистрация и вход, BE-44), `dto/credentials.dto.ts` (zod-схемы тел; ошибки полей — issues с `params.code` для `details`), `session-user.ts` (`SESSION_USER_SELECT`, `toSessionUser`, `SessionUser`), `session-cookie.ts` (cookie `sid`: чтение, установка, очистка), `user-lock.ts` (`lockUserRow`: `FOR UPDATE` строки пользователя, общая точка с отключением админом; для BE-39), `cookie-options.ts`. `AuthModule` импортирует `CommonModule` (guards входа). OAuth и passkeys нет (SH-D14, BE-D38).
 - `auth/password/` — чистые функции без Nest-провайдеров (BE-30, BE-D31): `password-hasher.ts` (`hashPassword`, `verifyPassword`, `verifyAgainstDummyHash`: потолок параметров PHC m≤65536, t≤10, p≤4; argon2id из `node:crypto`, PHC-строка, `timingSafeEqual`), `password-policy.ts` (`validatePassword`: `required`/`too_short`/`too_long`/`too_common`), `login.ts` (`normalizeLogin`), `common-passwords.ts` (блоклист xato-net-10-million-passwords-1000000 из SecLists, MIT, 46146 строк ≥ 12 байт; TS-модуль, чтобы попадал в `dist`). К маршрутам подключаются в BE-44.
@@ -25,7 +25,7 @@
 - WebSocket: `GET /ws` (без префикса `/api`).
 
 ## Поток входа
-Публичные POST (`register`, `login`) проходят `OriginGuard` и `AuthRateLimitGuard` (`src/common/`, один бакет на IP), `TRUST_PROXY` задаёт `trust proxy`.
+Публичные POST (`register`, `login`) проходят `OriginGuard` и `AuthRateLimitGuard` (`src/common/`, один бакет на IP), `TRUST_PROXY` задаёт `trust proxy`. Порядок для `login`: IP-лимит (guard) → тело (pipe) → лимит попыток по логину (`AuthService.login`, вне транзакции с `FOR UPDATE`) → БД → argon2 → транзакция.
 - `register`: нормализация логина и политика пароля (zod-схема, `auth/password/`) → проверка занятости логина **до** хэширования (`409 login_taken` без argon2) → `hashPassword` вне транзакции → транзакция: создание пользователя (имя из `users/name-generator.ts`, `name` = `composeName`), удаление прежней сессии, создание новой. P2002 уникального индекса (гонка) ловится снаружи `$transaction` → `409 login_taken`.
 - `login`: `SELECT` по нормализованному логину вне транзакции → argon2 против хэша пользователя или фиктивного (`verifyAgainstDummyHash`; логин не по формату §4.1 — сразу фиктивный) → транзакция: `lockUserRow` (`FOR UPDATE`); `password_hash` изменился с момента проверки → `401 auth_failed`, `disabled_at` → `403 user_disabled`; затем удаление прежней сессии и создание новой. При любой неудаче прежняя сессия жива. Отключение админом берёт ту же блокировку (`AdminUsersService.update`).
 - `GET /auth/session`: `SessionGuard` уже нашёл сессию; сервис читает пользователя с явным `select` (`SESSION_USER_SELECT`, без `password_hash`).
