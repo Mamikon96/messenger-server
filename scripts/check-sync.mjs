@@ -262,7 +262,6 @@ export function runChecks(root) {
     for (const m of text.matchAll(/\b((?:SH|BE)-D\d+)\b/g)) {
       if (!decisionIds.has(m[1])) fail(`${f}: ссылка на несуществующее решение ${m[1]}`);
     }
-    if (f.startsWith('docs/superpowers/plans/')) continue; // исторические планы: ссылки на задачи не обязаны жить в tasks.md/архиве
     for (const m of text.matchAll(/\bBE-(\d+)\b/g)) {
       if (!taskIds.has(`BE-${m[1]}`)) fail(`${f}: ссылка на несуществующую задачу BE-${m[1]}`);
     }
