@@ -1,7 +1,7 @@
 # Архитектура backend
-> Проверено: 2026-10-17 @ f231628
+> Проверено: 2026-10-17 @ f98ef2b+dirty
 
-Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/superpowers/specs/2026-10-05-core-contract-design.md`). Целевые слои и соглашения — `product-agreements.md`.
+Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/contract.md`). Целевые слои и соглашения — `product-agreements.md`.
 
 ## Модули (`src/`)
 - `config/` — `parseEnv` (zod) и глобальный `ConfigService`; переменные — `.env.example`.

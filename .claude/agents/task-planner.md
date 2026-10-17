@@ -1,7 +1,7 @@
 ---
 name: task-planner
 description: Планировщик задач messenger-server. Дробит большую задачу на мелкие логически завершённые задачи BE-NN с приоритетом P1–P3 и записывает их в «Бэклог» .ai/memory/tasks.md. Используй, когда задача слишком велика для одного захода. Код не пишет, задачи в работу не берёт.
-model: opus
+model: sonnet
 color: orange
 tools: Read, Grep, Glob, Bash, Edit
 ---

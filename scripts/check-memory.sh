@@ -99,7 +99,7 @@ while IFS= read -r md; do
     esac
     [ -e "$target" ] || fail "$md: ссылка на несуществующий путь '$path'"
   done < <(grep -oE '`[^`]+`' "$md" | tr -d '`' | sort -u)
-done < <({ find .ai -name '*.md'; echo CLAUDE.md; echo docs/client-integration.md; echo docs/superpowers/specs/2026-10-05-core-contract-design.md; })
+done < <({ find .ai -name '*.md'; echo CLAUDE.md; echo docs/client-integration.md; echo docs/contract.md; })
 
 # Автоприёмка в state.md: строку пишет scripts/accept.sh, формат фиксирован
 grep -qE '^Автоприёмка \(пишет scripts/accept.sh\): код 0 · [0-9]{4}-[0-9]{2}-[0-9]{2} · unit [0-9]+/[0-9]+ · e2e [0-9]+/[0-9]+$' "$MEM/state.md" \
