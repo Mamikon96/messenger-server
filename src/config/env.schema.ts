@@ -14,6 +14,7 @@ export interface AppConfig {
   wsHeartbeatMs: number;
   wsMaxSocketsPerUser: number;
   authRatePerMinute: number;
+  searchRateLimit: number;
   trustProxy: number;
 }
 
@@ -50,6 +51,7 @@ const envSchema = z.object({
   WS_HEARTBEAT_MS: z.coerce.number().int().positive().default(30000),
   WS_MAX_SOCKETS_PER_USER: z.coerce.number().int().min(1).default(10),
   AUTH_RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  SEARCH_RATE_LIMIT: z.coerce.number().int().positive().default(60),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
 
@@ -68,6 +70,7 @@ export function parseEnv(raw: Record<string, string | undefined>): AppConfig {
     wsHeartbeatMs: env.WS_HEARTBEAT_MS,
     wsMaxSocketsPerUser: env.WS_MAX_SOCKETS_PER_USER,
     authRatePerMinute: env.AUTH_RATE_PER_MINUTE,
+    searchRateLimit: env.SEARCH_RATE_LIMIT,
     trustProxy: env.TRUST_PROXY,
   };
 }
