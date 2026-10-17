@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runChecks } from './check-sync.mjs';
@@ -30,6 +30,12 @@ describe('check-sync', () => {
     writeFileSync(join(dir, rel), next);
   };
   const SPEC = 'docs/contract.md';
+  const TASKS = '.ai/memory/tasks.md';
+  const addBacklogFile = (id, text = 'Детали.\n') => {
+    mkdirSync(join(dir, '.ai/memory/backlog'), { recursive: true });
+    writeFileSync(join(dir, `.ai/memory/backlog/${id}.md`), text);
+  };
+  const backlogLine = (id) => `- **${id} (P3)** Задача\n`;
 
   it('passes on the repository as is', () => {
     expect(runChecks(dir).errors).toEqual([]);
@@ -58,9 +64,35 @@ describe('check-sync', () => {
     ['a done section kept in tasks.md', '.ai/memory/tasks.md', (t) => `${t}\n## Сделано\n- 2026-01-01 — BE-01: тест.\n`, /секция «Сделано» живёт/],
     ['a task reference that exists nowhere once the archive entry is gone', '.ai/memory/tasks-archive.md', (t) => t.replaceAll('BE-01', 'BE-0'), /product-agreements\.md: ссылка на несуществующую задачу BE-01\b/],
     ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => `${t}\nСм. 8б.99.\n`, /8б\.99/],
+    ['a backlog line longer than 200 characters', TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n- **BE-998 (P3)** ${'x'.repeat(200)} — детали: backlog/BE-998.md\n`), /BE-998.*200/],
+    ['a backlog line without a details file', TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n${backlogLine('BE-997')}`), /BE-997.*backlog\/BE-997\.md/],
+    ['tasks.md over the size limit', TASKS, (t) => `${t}\n${'я'.repeat(3000)}\n`, /5000/],
   ])('fails on %s', (_name, rel, fn, pattern) => {
     edit(rel, fn);
     const { errors } = runChecks(dir);
     expect(errors.join('\n')).toMatch(pattern);
+  });
+
+  it('does not count the in-progress section toward the tasks.md size limit', () => {
+    edit(TASKS, (t) => t.replace(/^## Бэклог\n/m, `  - Заметка: ${'я'.repeat(6000)}\n\n## Бэклог\n`));
+    expect(runChecks(dir).errors.join('\n')).not.toMatch(/5000/);
+  });
+
+  it('fails on a details file that has no line in the backlog', () => {
+    addBacklogFile('BE-995');
+    expect(runChecks(dir).errors.join('\n')).toMatch(/BE-995.*(сирота|нет строки)/);
+  });
+
+  it('accepts a task that exists only as a backlog line with its details file', () => {
+    addBacklogFile('BE-994');
+    edit(TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n${backlogLine('BE-994')}`));
+    edit('.ai/memory/state.md', (t) => `${t}\nСм. BE-994.\n`);
+    expect(runChecks(dir).errors).toEqual([]);
+  });
+
+  it('resolves task references written inside a details file', () => {
+    addBacklogFile('BE-993', 'Зависит от BE-992.\n');
+    edit(TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n${backlogLine('BE-993')}`));
+    expect(runChecks(dir).errors.join('\n')).toMatch(/BE-992/);
   });
 });
