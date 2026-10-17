@@ -90,4 +90,15 @@ export class AuthController {
     await this.auth.signOut(session.token);
     clearSessionCookie(res, this.config.get());
   }
+
+  @Post('logout-all')
+  @HttpCode(204)
+  @UseGuards(SessionGuard, CsrfGuard)
+  async logoutAll(
+    @CurrentSession() session: RequestSession,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.auth.signOutAll(session.userId);
+    clearSessionCookie(res, this.config.get());
+  }
 }
