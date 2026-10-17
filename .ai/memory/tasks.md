@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-15 @ 32da22a+dirty
+> Проверено: 2026-10-16 @ 5d0be62+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
