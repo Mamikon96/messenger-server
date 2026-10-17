@@ -13,7 +13,9 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)"
     ],
     "ask": [
       "Bash(npm install:*)",
@@ -116,10 +118,5 @@
         ]
       }
     ]
-  },
-  "enabledPlugins": {
-    "playwright@anthropic-plugin-directory": false,
-    "chrome-devtools-mcp@claude-plugins-official": false,
-    "frontend-design@anthropic-plugin-directory": false
   }
 }
