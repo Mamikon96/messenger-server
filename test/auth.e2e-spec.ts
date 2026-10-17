@@ -121,6 +121,47 @@ describe('Auth (e2e)', () => {
     await http().get('/api/auth/session').set('Cookie', me.cookie).expect(401);
   });
 
+  describe('POST /auth/logout-all', () => {
+    const logoutAll = (me: { cookie: string; csrf?: string }) => {
+      const req = http().post('/api/auth/logout-all').set('Cookie', me.cookie);
+      return me.csrf ? req.set('X-CSRF-Token', me.csrf) : req;
+    };
+
+    it('401 without a session, 403 without CSRF', async () => {
+      await http().post('/api/auth/logout-all').expect(401);
+      const me = await loginAs(app);
+      const res = await logoutAll({ cookie: me.cookie }).expect(403);
+      expect(res.body.error.code).toBe('csrf_invalid');
+      await http()
+        .get('/api/auth/session')
+        .set('Cookie', me.cookie)
+        .expect(200);
+    });
+
+    it('204, clears the cookie and destroys every session of the user only', async () => {
+      const me = await loginAs(app);
+      const { token } = await app.get(SessionsService).create(me.userId);
+      const other = await loginAs(app);
+      const res = await logoutAll(me).expect(204);
+      const sid = sidOf(res)!;
+      expect(sid).toContain('Path=/');
+      expect(sid).toMatch(/Expires=Thu, 01 Jan 1970/);
+      await http()
+        .get('/api/auth/session')
+        .set('Cookie', me.cookie)
+        .expect(401);
+      const second = await http()
+        .get('/api/auth/session')
+        .set('Cookie', `sid=${token}`)
+        .expect(401);
+      expect(second.body.error.code).toBe('unauthorized');
+      await http()
+        .get('/api/auth/session')
+        .set('Cookie', other.cookie)
+        .expect(200);
+    });
+  });
+
   describe('POST /auth/register', () => {
     it('creates the user, generates the name and signs in (201 + cookie sid)', async () => {
       const res = await register({
