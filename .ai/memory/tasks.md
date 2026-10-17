@@ -1,11 +1,23 @@
 # Задачи backend
-> Проверено: 2026-10-17 @ f231628
+> Проверено: 2026-10-17 @ 5aa1e5c+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-(пусто)
+- **BE-54 (P2)** AI-харнес, шаг 1: решение SH-D21, права, закрытые планы, живая спека
+  - Цель: меньше шума в контексте и запросов подтверждения в AI-сессиях; API и поведение сервера не меняются.
+  - Критерии приёмки:
+    1. В `.ai/memory/decisions.md` запись SH-D21: выбор пользователя по плану оптимизации харнеса от 2026-10-17.
+    2. `.claude/settings.json`: `gh pr create` и `gh pr view` в `permissions.allow`; блок `enabledPlugins` удалён (проектное `false` не перекрывает пользовательское `true`).
+    3. Удалены `docs/superpowers/plans/` и `docs/harness-audit-2026-10-12.md`; исторические ссылки на них в `.ai/` переписаны текстом без пути; `bash scripts/check-memory.sh` = 0.
+    4. Спека ядра переименована в docs/contract.md; `scripts/check-sync.mjs`, `scripts/check-sync.spec.mjs`, `scripts/check-memory.sh`, `.ai/memory/README.md`, `.ai/memory/architecture.md`, `.ai/memory/tasks.md` ссылаются на новый путь; `grep -rn 'superpowers/specs'` по репозиторию (без `node_modules`) пуст.
+    5. `.ai/rules/workflow.md` §1: план superpowers удаляется в коммите закрытия задачи.
+    6. `.claude/agents/task-planner.md`: `model: sonnet`.
+  - Вне рамок: бэклог в одну строку (BE-55), индекс решений (BE-56), сжатие `CLAUDE.md` и матрица закрытия (BE-57), пользовательские настройки `~/.claude` и клиент (BE-58).
+  - Затрагивает: `.ai/`, `.claude/settings.json`, `.claude/agents/task-planner.md`, `docs/`, `scripts/check-sync.mjs`, `scripts/check-sync.spec.mjs`, `scripts/check-memory.sh`; контракт API: нет; схема БД: нет.
+  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; ревью `nestjs-reviewer` по диффу `scripts/`.
+  - Осталось: SH-D21 → права и агент → планы и аудит → переименование спеки → правило в workflow → приёмка → ревью.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
@@ -15,6 +27,10 @@
 - `pg` — runtime-зависимость адаптера Prisma — объявлена в `devDependencies` (BE-D18); перенести в `dependencies`, если понадобится прямой импорт в prod-коде.
 
 ## Бэклог
+- **BE-55 (P1)** AI-харнес, шаг 2: бэклог `tasks.md` одной строкой, детали задач — в `.ai/memory/backlog/<ID>.md`; хвосты BE-07 — одной задачей; `scripts/check-sync.mjs` собирает ID задач и из `backlog/`, ловит сирот и строки длиннее 200 символов (SH-D21, план P1). Цель: `tasks.md` ≤ 5 000 байт.
+- **BE-56 (P2)** AI-харнес, шаг 3: записи «ЗАМЕНЕНО» из `decisions.md` — в `decisions-archive.md`; индекс `decisions-index.md` генерирует скрипт, ручная правка запрещена; `check-sync.mjs` и `check-memory.sh` читают оба файла (SH-D21, план P2).
+- **BE-57 (P2)** AI-харнес, шаг 4: правила `CLAUDE.md` — по строке со ссылкой (≤ 4 000 байт), удалить `.ai/README.md`, общий блок «чего не читать» — в новое правило .ai/rules/context-budget.md для агентов; матрица «тип изменения → шаги закрытия» в `.ai/rules/acceptance.md` (SH-D21, план P4, P5).
+- **BE-58 (P3)** AI-харнес, шаг 5 (после закрытия FE-40 в клиенте): отключить frontend-плагины в пользовательских настройках и включить их в клиенте; перенести frontend-агентов и скиллы из пользовательского каталога в репозитории; замер пола до и после (SH-D21, план A1, A2, M1). Вне этого репозитория — правит пользователь.
 - **BE-51 (P1)** Группа без участников (FE-D45): в `src/chats/dto/create-chat.dto.ts` `memberIds` — `.min(0)` + `.default([])` (сервис пустой список уже обрабатывает: `src/chats/chats.service.ts`, `requireActive([])` проходит). Заодно `.max()` у `memberIds` (хвост BE-07). Сначала e2e: группа с `memberIds: []` и без поля → `201`, в `members` один owner, `chat.created` никому не уходит; дубли/создатель в `memberIds` → `400` как раньше. Доки check-sync: `docs/client-integration.md` §3.3. `bash scripts/accept.sh` = 0.
 - **BE-52 (P2)** Удаление группы владельцем (FE-D45: без него пустую группу не убрать — owner не может выйти, `src/chats/chats.service.ts`). Предварительно `DELETE /api/chats/:id` (CSRF): только `group` и только owner; порядок ошибок по образцу §3.6–3.7 (`404` не участник → `400` direct → `403` не owner); `204`; остальные участники получают `chat.removed {chatId}`; сообщения и участники удаляются каскадом. Форму эндпоинта и судьбу истории (удалять или архивировать) подтвердить у пользователя до тестов. Сначала e2e. Доки check-sync: `docs/client-integration.md` §3, §5.2, core-спека, `architecture.md`. `bash scripts/accept.sh` = 0. Зависит от: BE-51.
 - **BE-53 (P2)** Закрыть отдачу всех пользователей: `GET /api/users` без `q` → `400` (сейчас при открытой регистрации любой новый аккаунт получает весь справочник). Ломающее изменение: только после перехода клиента на поиск и имена из `members` (клиент FE-44, FE-39). Сначала e2e. Доки check-sync: `docs/client-integration.md` §3.1, §4. `bash scripts/accept.sh` = 0. Зависит от: BE-50, клиент FE-44.
