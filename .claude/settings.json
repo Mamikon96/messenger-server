@@ -33,6 +33,12 @@
       "Bash(rm -rf:*)"
     ]
   },
+  "enabledPlugins": {
+    "superpowers@anthropic-plugin-directory": false,
+    "playwright@anthropic-plugin-directory": false,
+    "chrome-devtools-mcp@claude-plugins-official": false,
+    "frontend-design@anthropic-plugin-directory": false
+  },
   "hooks": {
     "SessionStart": [
       {
