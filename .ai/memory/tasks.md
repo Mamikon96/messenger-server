@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-17 @ cff1741+dirty
+> Проверено: 2026-10-17 @ 4cb2f46+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -17,7 +17,7 @@
   - Вне рамок: бэклог в одну строку (BE-55), индекс решений (BE-56), сжатие `CLAUDE.md` и матрица закрытия (BE-57), пользовательские настройки `~/.claude` и клиент (BE-58).
   - Затрагивает: `.ai/`, `.claude/settings.json`, `.claude/agents/task-planner.md`, `docs/`, `scripts/check-sync.mjs`, `scripts/check-sync.spec.mjs`, `scripts/check-memory.sh`; контракт API: нет; схема БД: нет.
   - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; ревью `nestjs-reviewer` по диффу `scripts/`.
-  - Осталось: правило в workflow → приёмка → ревью.
+  - Осталось: приёмка → ревью → push и PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
