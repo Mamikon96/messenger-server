@@ -11,7 +11,7 @@
 Вопросы 1–6 предыдущей редакции (коды `already_exists` и `login_taken`, значения `auth_error` для клиента, `FIRST_ADMIN`, email Google в allowlist, проверка реальных Google/GitHub) потеряли смысл: OAuth, allowlist и `auth_error` удалены, первый админ и восстановление выполняются командой `npm run admin:invite` (BE-D26). Актуальный контракт — `docs/client-integration.md`, нерешённые вопросы клиента — его раздел 8.
 
 ## Нужны правки на стороне клиента (`messenger-client-react`)
-- Переход на вход и регистрацию по логину и паролю — задача BE-22 (passkeys и инвайты удалены, BE-D38). Правило выхода из системы: только при `401 unauthorized` (`docs/client-integration.md`, §2.6).
+- Переход на вход и регистрацию по логину и паролю — задача BE-22 (passkeys и инвайты удалены, BE-D38). Правило выхода из системы: только при `401 unauthorized` (`docs/client-integration.md`, §2.7).
 
 ## Не проверялось
 - Нет открытых пунктов (вход по passkey удалён в BE-33).
