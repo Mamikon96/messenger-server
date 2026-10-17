@@ -348,6 +348,24 @@ describe('WebSocket lifecycle (e2e)', () => {
     expect((await tab2.closed).code).toBe(4401);
   });
 
+  it('closes sockets of every session of the user with 4401 after logout-all', async () => {
+    await startApp();
+    const second = await app.get(SessionsService).create(alice.userId);
+    const bob = await loginAs(app, { name: 'Bob' });
+    const tab1 = await connectWs(app, { cookie: alice.cookie });
+    const tab2 = await connectWs(app, { cookie: `sid=${second.token}` });
+    const bobTab = await connectWs(app, { cookie: bob.cookie });
+    await request(app.getHttpServer())
+      .post('/api/auth/logout-all')
+      .set('Cookie', alice.cookie)
+      .set('X-CSRF-Token', alice.csrf)
+      .expect(204);
+    expect((await tab1.closed).code).toBe(4401);
+    expect((await tab2.closed).code).toBe(4401);
+    expect(bobTab.socket.readyState).toBe(1);
+    bobTab.close();
+  });
+
   it('closes a socket with 4401 once its session expiry time passes', async () => {
     await startApp();
     await prisma.session.updateMany({

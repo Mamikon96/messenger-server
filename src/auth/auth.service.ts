@@ -181,6 +181,10 @@ export class AuthService {
     await this.sessions.destroy(token);
   }
 
+  async signOutAll(userId: string): Promise<void> {
+    await this.sessions.revokeAllForUser(userId);
+  }
+
   /** Уничтожает прежнюю сессию этого браузера и создаёт новую в транзакции вызывающего. */
   private async startSession(
     tx: Prisma.TransactionClient,
