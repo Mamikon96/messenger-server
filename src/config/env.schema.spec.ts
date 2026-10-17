@@ -42,6 +42,12 @@ describe('parseEnv', () => {
     expect(config.trustProxy).toBe(0);
   });
 
+  it('defaults SEARCH_RATE_LIMIT to 60 and reads it', () => {
+    expect(parseEnv(valid).searchRateLimit).toBe(60);
+    expect(parseEnv({ ...valid, SEARCH_RATE_LIMIT: '5' }).searchRateLimit).toBe(5);
+    expect(() => parseEnv({ ...valid, SEARCH_RATE_LIMIT: '0' })).toThrow();
+  });
+
   it('reads AUTH_RATE_PER_MINUTE and TRUST_PROXY', () => {
     const config = parseEnv({
       ...valid,

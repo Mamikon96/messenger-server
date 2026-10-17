@@ -1,10 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-17 @ 77390f4
+> Проверено: 2026-10-17 @ 63c6b7d+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
+(пусто)
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
@@ -14,7 +15,6 @@
 - `pg` — runtime-зависимость адаптера Prisma — объявлена в `devDependencies` (BE-D18); перенести в `dependencies`, если понадобится прямой импорт в prod-коде.
 
 ## Бэклог
-- **BE-50 (P1)** Поиск людей `GET /api/users?q=&limit=` (решение клиента FE-D45, запрос пользователя 2026-10-17): `q` после trim 2..64 символа, поиск по `name` (ILIKE, префикс выше подстроки), `limit` по умолчанию 20, максимум 50, без курсора; исключать себя и отключённых; `login` в ответ не добавлять и по нему не искать (иначе поиск подтверждает существование логина); сортировка — префикс `name`, затем `name asc`, тайбрейкер `id`; опционально `excludeChatId` — не показывать участников этого чата (для «Пригласить»); rate limit по образцу `SlidingWindowLimiter`. Без `q` — прежний ответ (переходный период, см. BE-53). Сейчас: `src/users/users.service.ts`, `src/users/users.controller.ts`. Индекс не нужен при ~1000 строк (`pg_trgm` — только по `tech-approval.md`). Сначала e2e: `400` на короткий/длинный `q` и `limit`, исключение себя и отключённых, порядок, лимит, `excludeChatId`. Доки check-sync: `docs/client-integration.md` §3.1, core-спека, `architecture.md`. `bash scripts/accept.sh` = 0.
 - **BE-51 (P1)** Группа без участников (FE-D45): в `src/chats/dto/create-chat.dto.ts` `memberIds` — `.min(0)` + `.default([])` (сервис пустой список уже обрабатывает: `src/chats/chats.service.ts`, `requireActive([])` проходит). Заодно `.max()` у `memberIds` (хвост BE-07). Сначала e2e: группа с `memberIds: []` и без поля → `201`, в `members` один owner, `chat.created` никому не уходит; дубли/создатель в `memberIds` → `400` как раньше. Доки check-sync: `docs/client-integration.md` §3.3. `bash scripts/accept.sh` = 0.
 - **BE-52 (P2)** Удаление группы владельцем (FE-D45: без него пустую группу не убрать — owner не может выйти, `src/chats/chats.service.ts`). Предварительно `DELETE /api/chats/:id` (CSRF): только `group` и только owner; порядок ошибок по образцу §3.6–3.7 (`404` не участник → `400` direct → `403` не owner); `204`; остальные участники получают `chat.removed {chatId}`; сообщения и участники удаляются каскадом. Форму эндпоинта и судьбу истории (удалять или архивировать) подтвердить у пользователя до тестов. Сначала e2e. Доки check-sync: `docs/client-integration.md` §3, §5.2, core-спека, `architecture.md`. `bash scripts/accept.sh` = 0. Зависит от: BE-51.
 - **BE-53 (P2)** Закрыть отдачу всех пользователей: `GET /api/users` без `q` → `400` (сейчас при открытой регистрации любой новый аккаунт получает весь справочник). Ломающее изменение: только после перехода клиента на поиск и имена из `members` (клиент FE-44, FE-39). Сначала e2e. Доки check-sync: `docs/client-integration.md` §3.1, §4. `bash scripts/accept.sh` = 0. Зависит от: BE-50, клиент FE-44.
