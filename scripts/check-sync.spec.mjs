@@ -29,7 +29,7 @@ describe('check-sync', () => {
     expect(next, `мутация ${rel} ничего не изменила`).not.toBe(text);
     writeFileSync(join(dir, rel), next);
   };
-  const SPEC = 'docs/superpowers/specs/2026-10-05-core-contract-design.md';
+  const SPEC = 'docs/contract.md';
 
   it('passes on the repository as is', () => {
     expect(runChecks(dir).errors).toEqual([]);

@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SPEC = 'docs/superpowers/specs/2026-10-05-core-contract-design.md';
+const SPEC = 'docs/contract.md';
 const CLIENT = 'docs/client-integration.md';
 const ARCH = '.ai/memory/architecture.md';
 const DECISIONS = '.ai/memory/decisions.md';
