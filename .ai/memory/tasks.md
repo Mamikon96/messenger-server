@@ -1,12 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-17 @ db45aa0
+> Проверено: 2026-10-17 @ f231628
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
 (пусто)
-> Хвост BE-35 (закрыта: accept=0, APPROVE): на ветке `feature/BE-35-logout-all` изменения НЕ закоммичены. Осталось: 4 коммита через `GIT_TASK_CO_AUTHOR='Claude Sonnet 5.5 <noreply@anthropic.com>' bash scripts/git-task.sh commit` (test: test/auth.e2e-spec.ts test/ws.e2e-spec.ts; feat: src/auth/auth.controller.ts src/auth/auth.service.ts; docs: docs/client-integration.md docs/open-questions.md docs/superpowers/specs/2026-10-05-core-contract-design.md .ai/memory/architecture.md; docs(memory): .ai/memory/tasks.md tasks-archive.md state.md), затем push и `gh pr create --base develop`. Строку удалить после PR.
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
