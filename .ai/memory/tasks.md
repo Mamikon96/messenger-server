@@ -1,23 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-17 @ ac49451+dirty
+> Проверено: 2026-10-17 @ f98ef2b+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. «Зависит от» — другие задачи/решения.
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-54 (P2)** AI-харнес, шаг 1: решение SH-D21, права, закрытые планы, живая спека
-  - Цель: меньше шума в контексте и запросов подтверждения в AI-сессиях; API и поведение сервера не меняются.
-  - Критерии приёмки:
-    1. В `.ai/memory/decisions.md` запись SH-D21: выбор пользователя по плану оптимизации харнеса от 2026-10-17.
-    2. `.claude/settings.json`: `gh pr create` и `gh pr view` в `permissions.allow`; блок `enabledPlugins` удалён (проектное `false` не перекрывает пользовательское `true`).
-    3. Удалены каталог docs/superpowers/plans/ и файл docs/harness-audit-2026-10-12.md; исторические ссылки на них в `.ai/` переписаны текстом без пути; `bash scripts/check-memory.sh` = 0.
-    4. Спека ядра переименована в `docs/contract.md`; `scripts/check-sync.mjs`, `scripts/check-sync.spec.mjs`, `scripts/check-memory.sh`, `.ai/memory/README.md`, `.ai/memory/architecture.md`, `.ai/memory/tasks.md` ссылаются на новый путь; ссылок на прежний путь спеки в репозитории нет.
-    5. `.ai/rules/workflow.md` §1: план superpowers удаляется в коммите закрытия задачи.
-    6. `.claude/agents/task-planner.md`: `model: sonnet`.
-  - Вне рамок: бэклог в одну строку (BE-55), индекс решений (BE-56), сжатие `CLAUDE.md` и матрица закрытия (BE-57), пользовательские настройки `~/.claude` и клиент (BE-58).
-  - Затрагивает: `.ai/`, `.claude/settings.json`, `.claude/agents/task-planner.md`, `docs/`, `scripts/check-sync.mjs`, `scripts/check-sync.spec.mjs`, `scripts/check-memory.sh`; контракт API: нет; схема БД: нет.
-  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; ревью `nestjs-reviewer` по диффу `scripts/`.
-  - Осталось: фикс MINOR ревью (мёртвый пропуск планов в check-sync, путь в nestjs-reviewer) → приёмка → повторное ревью по дельте → push и PR.
+(пусто)
 
 ## Хвосты BE-07 (minor из ревью, не блокируют)
 - Task 2: тест «shows an admin without an allowlist entry» не даёт RED (добавить обычного пользователя без записи рядом).
