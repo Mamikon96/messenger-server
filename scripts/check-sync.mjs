@@ -12,6 +12,9 @@ const ARCH = '.ai/memory/architecture.md';
 const DECISIONS = '.ai/memory/decisions.md';
 const TASKS = '.ai/memory/tasks.md';
 const TASKS_ARCHIVE = '.ai/memory/tasks-archive.md';
+const BACKLOG_DIR = '.ai/memory/backlog';
+const TASKS_MAX_BYTES = 5000;
+const BACKLOG_LINE_MAX = 200;
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
 /** Стандартные коды закрытия WebSocket, которых нет в нашем коде (их ставит библиотека `ws`/браузер). */
 const PROTOCOL_CLOSE_CODES = new Set(['1006', '1009']);
@@ -250,7 +253,8 @@ export function runChecks(root) {
 
   // ---------- 8. Решения и задачи: ссылки существуют ----------
   const decisionIds = new Set([...decisions.matchAll(/^## ((?:SH|BE)-D\d+)\b/gm)].map((m) => m[1]));
-  const taskIds = new Set([...`${tasks}\n${archive}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
+  const backlogFiles = existsSync(path(BACKLOG_DIR)) ? readdirSync(path(BACKLOG_DIR)).filter((f) => f.endsWith('.md')) : [];
+  const taskIds = new Set([...`${tasks}\n${archive}\n${backlogFiles.join('\n')}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
   const scanned = [
     ...srcFiles, ...walk('src', (f) => f.endsWith('.spec.ts')), ...walk('test', (f) => f.endsWith('.ts')),
     ...walk('scripts', () => true), ...walk('.ai', (f) => f.endsWith('.md')), ...walk('docs', (f) => f.endsWith('.md')),
@@ -284,6 +288,20 @@ export function runChecks(root) {
       if (!new RegExp(`^\\s+- ${key}:`, 'm').test(body)) fail(`${TASKS}: у ${id} в «В работе» нет пункта контракта «${key}:» (.ai/rules/workflow.md)`);
     }
   }
+  // Бэклог — одна строка на задачу со ссылкой на файл деталей (SH-D21)
+  const linked = new Set();
+  for (const line of section(tasks, 'Бэклог').split('\n').filter((l) => /^- \*\*BE-\d+/.test(l))) {
+    const id = line.match(/^- \*\*(BE-\d+)/)[1];
+    if ([...line].length > BACKLOG_LINE_MAX) fail(`${TASKS}: строка ${id} в «Бэклог» длиннее ${BACKLOG_LINE_MAX} символов — детали в ${BACKLOG_DIR}/${id}.md`);
+    if (!backlogFiles.includes(`${id}.md`)) fail(`${TASKS}: у ${id} в «Бэклог» нет файла ${BACKLOG_DIR}/${id}.md`);
+    else linked.add(`${id}.md`);
+  }
+  for (const f of backlogFiles) {
+    if (!linked.has(f)) fail(`${BACKLOG_DIR}/${f}: сирота — нет строки в «Бэклог» ${TASKS} (задача в работе или закрыта — файл удаляется)`);
+  }
+  // Контракт задачи в работе объёмный по определению, поэтому предел — на файл без секции «В работе»
+  const tasksBytes = Buffer.byteLength(tasks.replace(section(tasks, 'В работе'), ''));
+  if (tasksBytes > TASKS_MAX_BYTES) fail(`${TASKS}: ${tasksBytes} байт без секции «В работе», предел ${TASKS_MAX_BYTES} — детали задач выносятся в ${BACKLOG_DIR}/`);
   if (/^## Сделано/m.test(tasks)) fail(`${TASKS}: секция «Сделано» живёт в ${TASKS_ARCHIVE}`);
 
   // ---------- 10. Внешний репозиторий клиента (только предупреждения) ----------

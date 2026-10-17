@@ -41,13 +41,18 @@ check_side() {
       grep -q "^$sec" "$dir/tasks.md" || fail "$dir/tasks.md: нет секции '$sec'"
     done
 
-    # Уникальность ID и правильный префикс
-    local ids dups bad
+    # Уникальность ID в tasks.md; файлы backlog/<ID>.md — тот же префикс, и не пересекаются с «В работе»
+    # (при старте задачи её файл удаляется; соответствие строк «Бэклог» файлам проверяет check-sync.mjs)
+    local ids dups bad files started
     ids=$(grep -oE '^- \*\*[A-Z]+-[0-9]+' "$dir/tasks.md" | sed 's/^- \*\*//')
     dups=$(echo "$ids" | sort | uniq -d)
     [ -z "$dups" ] || fail "$dir/tasks.md: повторяющиеся ID: $(echo $dups)"
-    bad=$(echo "$ids" | grep -vE "^$tp-[0-9]+$" || true)
-    [ -z "$bad" ] || fail "$dir/tasks.md: ID не со своим префиксом $tp-: $(echo $bad)"
+    files=""
+    [ -d "$dir/backlog" ] && files=$(find "$dir/backlog" -maxdepth 1 -name '*.md' -exec basename {} .md \;)
+    bad=$(printf '%s\n%s\n' "$ids" "$files" | grep -vE "^$tp-[0-9]+$|^$" || true)
+    [ -z "$bad" ] || fail "$dir: ID не со своим префиксом $tp-: $(echo $bad)"
+    started=$(awk '/^## В работе/{f=1;next} /^## /{f=0} f' "$dir/tasks.md" | grep -oE '^- \*\*[A-Z]+-[0-9]+' | sed 's/^- \*\*//')
+    [ -z "$started" ] || [ -z "$files" ] || { dups=$(printf '%s\n%s\n' "$started" "$files" | sort | uniq -d); [ -z "$dups" ] || fail "$dir/backlog: задача уже в «В работе», файл надо удалить: $(echo $dups)"; }
 
     # «В работе»: каждая задача с блоком «Осталось»
     local wip
