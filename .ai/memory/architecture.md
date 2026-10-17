@@ -1,5 +1,5 @@
 # Архитектура backend
-> Проверено: 2026-10-17 @ 6408dda+dirty
+> Проверено: 2026-10-17 @ 186a540+dirty
 
 Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/superpowers/specs/2026-10-05-core-contract-design.md`). Целевые слои и соглашения — `product-agreements.md`.
 
