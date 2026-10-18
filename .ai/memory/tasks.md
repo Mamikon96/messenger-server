@@ -1,11 +1,24 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ f4a5b38+dirty
+> Проверено: 2026-10-18 @ 598dc9d+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-Нет задачи в работе.
+- **BE-36 (P1)** Скользящая сессия 400 дней: SESSION_TTL_DAYS, продление и перевыставление cookie
+  - Цель: сессия живёт 400 дней и продлевается при активности, пользователь остаётся залогиненным, пока сам не выйдет (BE-D32, BE-D35).
+  - Критерии приёмки:
+    1. `SESSION_TTL_DAYS` по умолчанию 400 (`src/config/env.schema.ts`, `.env.example`).
+    2. REST-запрос под `SessionGuard`, у которого до `expires_at` осталось меньше `TTL − 1 сутки`, ставит `expires_at = now + TTL` и отдаёт `Set-Cookie sid` с новым `Expires`.
+    3. Запрос в те же сутки не пишет в БД и не ставит cookie.
+    4. Параллельные запросы не пишут дважды: продление — условный `updateMany` по порогу, cookie ставит только запрос с `count = 1`.
+    5. Просроченная сессия → `401`.
+    6. WS-рукопожатие и heartbeat сессию не продлевают: `SessionsService.authenticate` остаётся чистым, продление — отдельный вызов из `SessionGuard`.
+    7. `POST /api/auth/logout` под сессией старше суток: в ответе cookie `sid` очищена (последний `Set-Cookie` удаляет её), сессия удалена.
+  - Вне рамок: срок сессии на тике heartbeat по БД (BE-37); продление до `CsrfGuard` допустимо (запрос с неверным CSRF тоже продлит); схема БД; удаление `docs/auth-password-spec.md` (BE-42).
+  - Затрагивает: `src/sessions/` (`sessions.service.ts`, `session.guard.ts`), `src/config/env.schema.ts`, `.env.example`, тесты (`src/sessions`, `test/sessions.e2e-spec.ts`), `docs/client-integration.md` §2.2 и §7, `docs/contract.md`, `.ai/memory/architecture.md`; контракт API: да (срок сессии, cookie); схема БД: нет.
+  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
+  - Осталось: сделано — ветка, тесты (unit `sessions.service.spec.ts`, e2e в `sessions`/`auth`), `renew` + продление в `SessionGuard`, умолчание 400, доки; дальше — `accept.sh`, ревью `nestjs-reviewer`, закрытие (архив, push, PR).
 
 ## Бэклог
 - **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
@@ -18,7 +31,6 @@
 - **BE-43 (P2, харнес)** Харнес: нестабильный e2e (113/229 упавших в одном прогоне), найти причину
 - **BE-29 (P1, эпик)** Эпик: вход и регистрация по логину/паролю (SH-D18), подзадачи BE-30…BE-45
 - **BE-34 (P1)** CLI admin:promote <login> и поля login/firstName/lastName в AdminUserItem
-- **BE-36 (P1)** Скользящая сессия 400 дней: SESSION_TTL_DAYS, продление и перевыставление cookie
 - **BE-42 (P1, документация)** Влить docs/auth-password-spec.md в client-integration.md и удалить её
 - **BE-37 (P2)** Срок сессии на тике heartbeat по БД, а не из рукопожатия
 - **BE-27 (P3, харнес)** Харнес: мутационные тесты check-sync.spec зависят от состояния tasks.md
