@@ -55,7 +55,7 @@ describe('check-sync', () => {
     ['a details code in code that docs do not mention', 'src/common/app-error.ts', (t) => t.replace("| 'too_common'", "| 'too_common'\n  | 'teapot_detail'"), /teapot_detail/],
     ['a details code documented but gone from code', 'docs/client-integration.md', (t) => t.replace('| `too_common` |', '| `too_rare` |'), /too_rare/],
     ['a stale env default in .env.example', '.env.example', (t) => t.replace('MESSAGE_RATE_PER_MINUTE=30', 'MESSAGE_RATE_PER_MINUTE=31'), /MESSAGE_RATE_PER_MINUTE/],
-    ['an env var absent from .env.example', '.env.example', (t) => t.replace('SESSION_TTL_DAYS=7\n', ''), /SESSION_TTL_DAYS/],
+    ['an env var absent from .env.example', '.env.example', (t) => t.replace('SESSION_TTL_DAYS=400\n', ''), /SESSION_TTL_DAYS/],
     ['a WS payload limit that differs from docs', 'src/realtime/realtime.gateway.ts', (t) => t.replace('maxPayload: 4096', 'maxPayload: 8192'), /КиБ/],
     ['a WS close code missing from docs', 'src/realtime/heartbeat.service.ts', (t) => t.replace('socket.close(4401', 'socket.close(4402'), /4402/],
     ['a Bytes column missing from the spec', 'prisma/schema.prisma', (t) => t.replace('  name         String\n', '  name         String\n  avatarBlob Bytes     @map("avatar_blob")\n'), /avatar_blob/],
