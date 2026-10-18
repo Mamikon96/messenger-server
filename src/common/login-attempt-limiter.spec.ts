@@ -91,4 +91,27 @@ describe('LoginAttemptLimiter', () => {
     limiter.acquire('a', WINDOW + 1);
     expect(limiter.size()).toBe(1);
   });
+
+  describe('refund', () => {
+    it('takes back one attempt and forgets a login left with none', () => {
+      const limiter = new LoginAttemptLimiter();
+      limiter.acquire('alice', 0);
+      limiter.refund('alice');
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('keeps the window and the other attempts of the series', () => {
+      const limiter = new LoginAttemptLimiter();
+      for (let i = 0; i < 10; i++) limiter.acquire('alice', 0);
+      limiter.refund('alice');
+      limiter.acquire('alice', 1_000);
+      expect(() => limiter.acquire('alice', 2_000)).toThrow(AppError);
+    });
+
+    it('ignores a login that has no entry', () => {
+      const limiter = new LoginAttemptLimiter();
+      limiter.refund('nobody');
+      expect(limiter.size()).toBe(0);
+    });
+  });
 });

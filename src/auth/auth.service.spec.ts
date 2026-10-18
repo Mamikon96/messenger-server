@@ -96,6 +96,17 @@ describe('AuthService', () => {
       expect(transaction).not.toHaveBeenCalled();
     });
 
+    it('a hash gate rejection (429) creates no user', async () => {
+      findUnique.mockResolvedValue(null);
+      vi.mocked(hashPassword).mockRejectedValue(
+        new AppError(429, 'rate_limited'),
+      );
+      await expect(
+        service.register({ login: 'alice', password: 'whatever-long-pass' }),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
     it('hashes outside the transaction', async () => {
       findUnique.mockResolvedValue(null);
       await service.register({
@@ -199,6 +210,39 @@ describe('AuthService', () => {
         service.login({ login: 'alice', password: 'x' }),
       ).rejects.toThrow('argon2 failed');
       expect(limiter.size()).toBe(1);
+    });
+
+    it('a hash gate rejection (429) gives the slot back: the attempt was never checked', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      vi.mocked(verifyPassword).mockRejectedValue(
+        new AppError(429, 'rate_limited'),
+      );
+      await expect(
+        service.login({ login: 'alice', password: 'x' }),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('a hash gate rejection for an unknown login gives the slot back too', async () => {
+      findUnique.mockResolvedValue(null);
+      vi.mocked(verifyAgainstDummyHash).mockRejectedValue(
+        new AppError(429, 'rate_limited'),
+      );
+      await expect(
+        service.login({ login: 'nobody', password: 'x' }),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(limiter.size()).toBe(0);
+    });
+
+    it('a hash gate rejection keeps earlier failed attempts of the login counted', async () => {
+      findUnique.mockResolvedValue({ id: 'u1', passwordHash: STORED_HASH });
+      for (let i = 0; i < 3; i++) limiter.acquire('alice');
+      vi.mocked(verifyPassword).mockRejectedValue(
+        new AppError(429, 'rate_limited'),
+      );
+      await service.login({ login: 'alice', password: 'x' }).catch(() => {});
+      for (let i = 0; i < 7; i++) limiter.acquire('alice');
+      expect(() => limiter.acquire('alice')).toThrow(AppError);
     });
 
     it('right password of a disabled user: 403 and the counter is reset', async () => {
@@ -319,6 +363,17 @@ describe('AuthService', () => {
         data: { passwordHash: '$argon2id$new' },
       });
       expect(revokeOthers).toHaveBeenCalledWith('u1', 'tok', expect.anything());
+    });
+
+    it('a hash gate rejection (429) on the current password check gives the slot back', async () => {
+      findUnique.mockResolvedValue(found);
+      vi.mocked(verifyPassword).mockRejectedValue(
+        new AppError(429, 'rate_limited'),
+      );
+      await expect(
+        service.changePassword('u1', 'tok', dto),
+      ).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(limiter.size()).toBe(0);
     });
 
     it('limited login: 429 before the database query and any argon2 work', async () => {
