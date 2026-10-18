@@ -50,6 +50,17 @@ export class LoginAttemptLimiter {
     else this.entries.set(login, { count: 1, startedAt: now });
   }
 
+  /**
+   * Takes back one attempt that was never checked (the hash gate refused it, BE-45): the window
+   * and the other attempts of the series stay.
+   */
+  refund(login: string): void {
+    const entry = this.entries.get(login);
+    if (!entry) return;
+    entry.count -= 1;
+    if (entry.count <= 0) this.entries.delete(login);
+  }
+
   /** Forgets the login after a successful password check. */
   release(login: string): void {
     this.entries.delete(login);

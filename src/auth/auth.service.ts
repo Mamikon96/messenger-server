@@ -114,9 +114,13 @@ export class AuthService {
           select: { id: true, passwordHash: true },
         })
       : null;
-    const verified = found
-      ? await verifyPassword(input.password, found.passwordHash)
-      : await verifyAgainstDummyHash(input.password);
+    const verified = await this.refundIfBusy(
+      normalized.ok ? normalized.login : undefined,
+      () =>
+        found
+          ? verifyPassword(input.password, found.passwordHash)
+          : verifyAgainstDummyHash(input.password),
+    );
     if (!found || !verified) throw new AppError(401, 'auth_failed');
     if (normalized.ok) this.loginAttempts.release(normalized.login);
     return this.prisma.$transaction(async (tx) => {
@@ -156,9 +160,10 @@ export class AuthService {
     });
     if (!found) throw new AppError(401, 'unauthorized');
     this.loginAttempts.acquire(found.login);
-    if (!(await verifyPassword(input.currentPassword, found.passwordHash))) {
-      throw new AppError(401, 'auth_failed');
-    }
+    const verified = await this.refundIfBusy(found.login, () =>
+      verifyPassword(input.currentPassword, found.passwordHash),
+    );
+    if (!verified) throw new AppError(401, 'auth_failed');
     this.loginAttempts.release(found.login);
     const newHash = await hashPassword(input.newPassword);
     await this.prisma.$transaction(async (tx) => {
@@ -175,6 +180,28 @@ export class AuthService {
       });
       await this.sessions.revokeOtherSessions(userId, keepToken, tx);
     });
+  }
+
+  /**
+   * The hash gate answered `429` (BE-45): the password was never checked, so the attempt taken by
+   * `acquire` is given back — server load must not lock a user out. Other failures keep the slot.
+   */
+  private async refundIfBusy<T>(
+    login: string | undefined,
+    check: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await check();
+    } catch (error) {
+      if (
+        login !== undefined &&
+        error instanceof AppError &&
+        error.code === 'rate_limited'
+      ) {
+        this.loginAttempts.refund(login);
+      }
+      throw error;
+    }
   }
 
   async signOut(token: string): Promise<void> {

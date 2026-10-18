@@ -794,3 +794,64 @@ describe('Login attempt limit per login (e2e)', { timeout: 30_000 }, () => {
     await login({ login: 'off', password: TEST_PASSWORD }).expect(403);
   });
 });
+
+describe('Auth: argon2 concurrency gate (e2e, BE-45)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+
+  const login = (body: object) =>
+    request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('Origin', ORIGIN)
+      .send(body);
+
+  beforeAll(async () => {
+    // the per-IP bucket must not interfere: all requests come from one address
+    vi.stubEnv('AUTH_RATE_PER_MINUTE', '1000');
+    app = await createTestApp();
+    prisma = app.get(PrismaService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  beforeEach(async () => {
+    await resetDb(prisma);
+  });
+
+  it('a parallel burst of logins: some are answered 401/200, the overflow gets 429 rate_limited + Retry-After', async () => {
+    await createUserRow(prisma, { login: 'burst-real' });
+    const attempts = [
+      login({ login: 'burst-real', password: TEST_PASSWORD }),
+      ...Array.from({ length: 39 }, (_, i) =>
+        login({ login: `burst-${i}`, password: 'wrong-password-1' }),
+      ),
+    ];
+    const responses = await Promise.all(attempts);
+
+    const answered = responses.filter(
+      (r) => r.status === 200 || r.status === 401,
+    );
+    const rejected = responses.filter((r) => r.status === 429);
+    expect(answered.length + rejected.length).toBe(responses.length);
+    expect(answered.length).toBeGreaterThanOrEqual(2);
+    expect(rejected.length).toBeGreaterThanOrEqual(1);
+    for (const res of rejected) {
+      expect(res.body.error.code).toBe('rate_limited');
+      expect(res.headers['retry-after']).toBe('1');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    }
+  });
+
+  it('after the burst drains the gate accepts logins again', async () => {
+    await createUserRow(prisma, { login: 'after-burst' });
+    await Promise.all(
+      Array.from({ length: 40 }, (_, i) =>
+        login({ login: `drain-${i}`, password: 'wrong-password-1' }),
+      ),
+    );
+    await login({ login: 'after-burst', password: TEST_PASSWORD }).expect(200);
+  });
+});

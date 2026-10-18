@@ -1,5 +1,6 @@
 import { argon2, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Argon2Parameters } from 'node:crypto';
+import { ConcurrencyGate } from '../../common/concurrency-gate.js';
 
 // argon2id parameters from OWASP Password Storage Cheat Sheet (BE-D31).
 const MEMORY_KIB = 19456;
@@ -30,16 +31,25 @@ interface ParsedPhc {
   tag: Buffer;
 }
 
+// Async crypto.argon2 does part of its work on the main thread (~40 ms per call, BE-D38), so
+// the number of hashes in flight is bounded: 2 run, 8 wait, the rest get 429 (BE-45).
+const MAX_ACTIVE_HASHES = 2;
+const MAX_QUEUED_HASHES = 8;
+const hashGate = new ConcurrencyGate(MAX_ACTIVE_HASHES, MAX_QUEUED_HASHES);
+
 function deriveKey(parameters: Argon2Parameters): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    argon2('argon2id', parameters, (error, key) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(key);
-      }
-    });
-  });
+  return hashGate.run(
+    () =>
+      new Promise<Buffer>((resolve, reject) => {
+        argon2('argon2id', parameters, (error, key) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(key);
+          }
+        });
+      }),
+  );
 }
 
 function encodeBase64NoPad(buffer: Buffer): string {

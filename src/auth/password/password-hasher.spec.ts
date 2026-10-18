@@ -16,6 +16,10 @@ vi.mock('node:crypto', async (importOriginal) => {
   };
 });
 
+const realArgon2 = (
+  await vi.importActual<typeof import('node:crypto')>('node:crypto')
+).argon2;
+
 const PHC_RE =
   /^\$argon2id\$v=19\$m=19456,t=2,p=1\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$/;
 
@@ -217,6 +221,99 @@ describe('verifyPassword strict parsing', () => {
     }) as unknown as typeof nodeCrypto.argon2);
     await expect(verifyPassword('correct horse battery', hash)).rejects.toThrow(
       'boom',
+    );
+  });
+});
+
+describe('argon2 concurrency gate (BE-45)', () => {
+  afterEach(() => {
+    vi.mocked(nodeCrypto.argon2).mockReset();
+    vi.mocked(nodeCrypto.argon2).mockImplementation(realArgon2);
+  });
+
+  // Holds every argon2 call until released; counts calls in flight.
+  function holdArgon2() {
+    const pending: Array<() => void> = [];
+    let active = 0;
+    let peak = 0;
+    vi.mocked(nodeCrypto.argon2).mockImplementation(((
+      ...args: Parameters<typeof nodeCrypto.argon2>
+    ) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      const callback = args[2];
+      pending.push(() => {
+        active -= 1;
+        callback(null, Buffer.alloc(32, 1));
+      });
+    }) as typeof nodeCrypto.argon2);
+    return {
+      pending,
+      peak: () => peak,
+      releaseAll: () => {
+        while (pending.length) pending.shift()!();
+      },
+    };
+  }
+
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('runs at most 2 argon2 calls at once across hash and verify', async () => {
+    const held = holdArgon2();
+    const calls = [
+      hashPassword('correct horse battery'),
+      verifyPassword('correct horse battery', DUMMY_PASSWORD_HASH),
+      verifyAgainstDummyHash('correct horse battery'),
+      hashPassword('correct horse battery'),
+    ];
+    await settle();
+    expect(held.pending).toHaveLength(2);
+
+    while (held.pending.length) {
+      held.pending.shift()!();
+      await settle();
+    }
+    await Promise.all(calls);
+    expect(held.peak()).toBe(2);
+  });
+
+  it('rejects with 429 rate_limited when 2 are running and 8 are queued, without calling argon2', async () => {
+    const held = holdArgon2();
+    const accepted = Array.from({ length: 10 }, () =>
+      hashPassword('correct horse battery'),
+    );
+    await settle();
+    const overflow = await verifyAgainstDummyHash(
+      'correct horse battery',
+    ).catch((e: unknown) => e);
+    expect(overflow).toMatchObject({
+      code: 'rate_limited',
+      headers: { 'Retry-After': '1' },
+    });
+    expect(held.pending).toHaveLength(2);
+
+    while (held.pending.length) {
+      held.pending.shift()!();
+      await settle();
+    }
+    await Promise.all(accepted);
+    expect(held.peak()).toBe(2);
+  });
+
+  it('frees the slot when argon2 fails', async () => {
+    vi.mocked(nodeCrypto.argon2).mockImplementation(((
+      ...args: Parameters<typeof nodeCrypto.argon2>
+    ) => {
+      args[2](new Error('argon2 failed'), undefined as never);
+    }) as typeof nodeCrypto.argon2);
+    for (let i = 0; i < 12; i += 1) {
+      await expect(hashPassword('correct horse battery')).rejects.toThrow(
+        'argon2 failed',
+      );
+    }
+    vi.mocked(nodeCrypto.argon2).mockImplementation(realArgon2);
+    await expect(hashPassword('correct horse battery')).resolves.toMatch(
+      PHC_RE,
     );
   });
 });
