@@ -134,4 +134,21 @@ describe('check-sync', () => {
     edit(TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n${backlogLine('BE-993')}`));
     expect(runChecks(dir).errors.join('\n')).toMatch(/BE-992/);
   });
+
+  describe('context thresholds', () => {
+    const GUARD = 'scripts/hooks/session-guard.mjs';
+    it('passes on the live files', () => {
+      expect(runChecks(dir).errors.join('\n')).not.toMatch(/порог контекста/);
+    });
+
+    it('fails when workflow.md names another Opus threshold than the guard', () => {
+      edit('.ai/rules/workflow.md', (t) => t.replace('150 000 токенов для Opus', '120 000 токенов для Opus'));
+      expect(runChecks(dir).errors.join('\n')).toMatch(/порог контекста.*150000/);
+    });
+
+    it('fails when the guard changes the other-model threshold', () => {
+      edit(GUARD, (t) => t.replace('90_000', '80_000'));
+      expect(runChecks(dir).errors.join('\n')).toMatch(/порог контекста.*90000/);
+    });
+  });
 });

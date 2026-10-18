@@ -342,6 +342,17 @@ export function runChecks(root) {
     }
   }
 
+  // ---------- 11. Пороги контекста: workflow.md §5 и session-guard.mjs (BE-63) ----------
+  const workflow = read('.ai/rules/workflow.md') ?? '';
+  const guardSrc = read('scripts/hooks/session-guard.mjs') ?? '';
+  const num = (s) => Number(s.replace(/[\s_]/g, ''));
+  const docOpus = workflow.match(/([\d ]+) токенов для Opus, ([\d ]+) для остальных/);
+  const codeLimits = guardSrc.match(/\/opus\/i\.test\(model\) \? ([\d_]+) : ([\d_]+)/);
+  if (!docOpus || !codeLimits) fail('порог контекста: не найден в workflow.md («N токенов для Opus, M для остальных») или в session-guard.mjs');
+  else if (num(docOpus[1]) !== num(codeLimits[1]) || num(docOpus[2]) !== num(codeLimits[2])) {
+    fail(`порог контекста: workflow.md ${num(docOpus[1])}/${num(docOpus[2])}, session-guard.mjs ${num(codeLimits[1])}/${num(codeLimits[2])}`);
+  }
+
   return { errors, warnings };
 }
 
