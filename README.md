@@ -1,6 +1,6 @@
 # messenger-server
 
-Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей): NestJS, PostgreSQL, WebSocket. Вход и регистрация по логину и паролю (`POST /api/auth/login`, `POST /api/auth/register`, BE-44; спека `docs/auth-password-spec.md`); passkeys и инвайты удалены в BE-33. Клиент — отдельный репозиторий `messenger-client-react`. Контракт API — `docs/client-integration.md`.
+Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей): NestJS, PostgreSQL, WebSocket. Вход и регистрация по логину и паролю (`POST /api/auth/login`, `POST /api/auth/register`, BE-44); passkeys и инвайты удалены в BE-33. Клиент — отдельный репозиторий `messenger-client-react`. Контракт API — `docs/client-integration.md`.
 
 ## Локальный запуск
 

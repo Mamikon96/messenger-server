@@ -1,5 +1,5 @@
 # Состояние backend
-> Проверено: 2026-10-18 @ ce0cc7b+dirty
+> Проверено: 2026-10-18 @ b633d0f+dirty
 
 ## Общее
 NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Админка пользователей (`users.disabled_at`, BE-21). Вход по passkeys, инвайты и CLI `admin:invite` удалены (BE-32, BE-33; SH-D18, BE-D38): вход и регистрация по логину и паролю — `POST /api/auth/register` и `POST /api/auth/login` (BE-44), e2e создают пользователей и сессии через `loginAs` (заранее вычисленный хэш пароля). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
@@ -16,7 +16,7 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза
 Ревью: BE-36 — nestjs-reviewer APPROVE
 
 ## Зависимости от другой стороны
-Клиент переходит на вход по логину/паролю (BE-22, спека `docs/auth-password-spec.md`, у клиента копия): его `auth-contract.md` устарел (OAuth). Копию спеки у клиента синхронизировать после BE-31 (§4.3, BE-D36).
+Клиент переходит на вход по логину/паролю (BE-22, контракт — `docs/client-integration.md`): его `auth-contract.md` устарел (OAuth); копию прежней отдельной спеки входа по паролю у клиента заменить ссылкой на `client-integration.md`.
 
 ## Фокус сейчас
 Эпик BE-29 (вход по паролю): BE-30…BE-33, BE-38, BE-40, BE-41 и BE-44 закрыты (BE-41: `details` у `400` для register/login; BE-38: `PATCH /api/me` с `details`); `details` для `POST /api/me/password` — в BE-39. Дальше BE-34…BE-36, BE-39, затем BE-42; BE-45 (argon2) — P2; без схемы можно делать BE-35, BE-36.
