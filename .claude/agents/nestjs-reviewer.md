@@ -11,8 +11,8 @@ tools: Read, Grep, Glob, Bash
 ## Контекст (только это)
 - Контракт задачи в «В работе» `.ai/memory/tasks.md`.
 - Дифф: `git diff $(git merge-base HEAD develop)` (включает незакоммиченное) и `git diff --stat` того же диапазона; изменённые файлы читай целиком.
-- `.ai/rules/code-style.md`, `.ai/rules/review-checklist.md`; нужные записи `decisions.md` — по заголовкам (`grep -n '^## '`), не целиком.
-- Не читай целиком `decisions.md`, `docs/client-integration.md`, планы в docs/plans/.
+- `.ai/rules/code-style.md`, `.ai/rules/review-checklist.md`; нужные решения — по индексу `decisions.md` и `grep -n -A12 '^## BE-D31' .ai/memory/decisions/*.md`, темы целиком не читай.
+- Не читай целиком файлы `decisions/`, `docs/client-integration.md`, планы в docs/plans/.
 
 ## Порядок
 1. **Контракт:** каждый критерий приёмки реализован и покрыт тестом; ничего из «Вне рамок» не сделано; правки вне «Затрагивает» — только с причиной.

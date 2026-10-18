@@ -26,7 +26,7 @@ Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + 
 | Тесты / новое поведение | `.ai/rules/testing.md` |
 | Баги, текущее состояние | `.ai/memory/state.md` |
 | Исследование и планирование задачи, дизайн API/схемы | `.ai/rules/research-planning.md` |
-| Новая библиотека/подход | `.ai/rules/tech-approval.md`, затем заголовки `.ai/memory/decisions.md` (`grep -n '^## '`, не целиком) |
+| Новая библиотека/подход | `.ai/rules/tech-approval.md`, затем индекс `.ai/memory/decisions.md` (ID → тема) и только нужная тема из `.ai/memory/decisions/` (`grep -n -A12 '^## BE-D31' .ai/memory/decisions/*.md`) |
 | Контракт API/событий, реалтайм, хранение | `.ai/memory/product-agreements.md` |
 | Самопроверка и ревью | `.ai/rules/review-checklist.md` |
 | Закрытие задачи | `.ai/rules/acceptance.md` |
@@ -39,7 +39,7 @@ Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + 
 ## Неснимаемые правила (детали — в файлах выше)
 1. **Память:** после ЛЮБЫХ изменений, до ответа пользователю, актуализируй `tasks.md` (+ `state.md`) и запусти `bash scripts/check-memory.sh` — штамп «Проверено» она пишет сама (Stop-hook не даст закончить ответ, пока проверка красная). Сессия выше порога контекста или после закрытия задачи останавливается hook'ом с требованием `/clear` (`.ai/rules/workflow.md` §5). Протокол — `.ai/rules/memory-protocol.md`.
 2. **Исследование и планирование:** к анализу подключается `system-analyst` (запускает основная сессия; дубли, контракт, БД, масштабирование). См. `.ai/rules/research-planning.md`.
-3. **Новые технологии/подходы** — только после опроса пользователя (`AskUserQuestion`); сразу после его выбора решение (что, почему, альтернативы) записывается в `decisions.md` — для вариантов от `solution-architect` это делает он; агенты читают `decisions.md`, а не изобретают заново. См. `.ai/rules/tech-approval.md`.
+3. **Новые технологии/подходы** — только после опроса пользователя (`AskUserQuestion`); сразу после его выбора решение (что, почему, альтернативы) записывается в конец файла темы `.ai/memory/decisions/<тема>.md`, затем `node scripts/decisions-index.mjs` пересобирает индекс `decisions.md` (вручную индекс не правится) — для вариантов от `solution-architect` это делает он; агенты читают индекс и нужную тему, а не изобретают заново. См. `.ai/rules/tech-approval.md`.
 4. **Приёмка:** закрытие задачи (запись в `.ai/memory/tasks-archive.md`) только при `bash scripts/accept.sh` = 0 **и** APPROVE от `nestjs-reviewer`; ревью запускает основная сессия. См. `.ai/rules/acceptance.md`.
 5. Для нового поведения — тест в рамках той же задачи, тесты пишутся до реализации. См. `.ai/rules/testing.md`.
 6. **Контракт и WIP = 1:** задача начинается с контракта (Цель, Критерии приёмки, Вне рамок, Затрагивает, Проверка, Осталось), подтверждённого пользователем; в работе одна задача; одна проверка упала 3 раза подряд — стоп и отчёт. См. `.ai/rules/workflow.md`.
