@@ -8,7 +8,7 @@ import { ConfigService } from '../config/config.service.js';
 import { SessionsService } from '../sessions/sessions.service.js';
 import { ConnectionRegistry } from './connection-registry.js';
 
-/** Один цикл на все сокеты: ping/pong, закрытие `4401` по окончании сессии, `1001` при остановке. */
+/** Один цикл на все сокеты: ping/pong, закрытие `4401` по окончании сессии (запись в БД, срок, пользователь), `1001` при остановке. */
 @Injectable()
 export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HeartbeatService.name);
@@ -47,14 +47,10 @@ export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
     const existing = await this.existingSessions(
       connections.map((c) => c.sessionId),
     );
-    const now = Date.now();
     for (const connection of connections) {
       const { socket } = connection;
       try {
-        if (
-          connection.expiresAt.getTime() <= now ||
-          (existing !== null && !existing.has(connection.sessionId))
-        ) {
+        if (existing !== null && !existing.has(connection.sessionId)) {
           socket.close(4401, 'session_ended');
           this.registry.remove(socket);
         } else if (!connection.alive) {
@@ -78,7 +74,7 @@ export class HeartbeatService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** `null` при сбое БД: тогда сессии по записи не проверяются, закрытие только по `expiresAt`. */
+  /** `null` при сбое БД: тогда сессии по записи не проверяются, никого не закрываем. */
   private async existingSessions(ids: string[]): Promise<Set<string> | null> {
     try {
       return await this.sessions.existingIds([...new Set(ids)]);

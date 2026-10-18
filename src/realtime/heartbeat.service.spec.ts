@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { ConfigService } from '../config/config.service.js';
 import type { SessionsService } from '../sessions/sessions.service.js';
 import {
@@ -29,17 +30,8 @@ function setup(existing: string[] = ['s1', 's2', 's3']) {
   );
   const sessions = { existingIds } as unknown as SessionsService;
   const service = new HeartbeatService(registry, sessions, config);
-  const add = (
-    id: string,
-    socket = fakeSocket(),
-    expiresInMs = 60_000,
-  ): Connection =>
-    registry.add({
-      socket,
-      userId: `u-${id}`,
-      sessionId: id,
-      expiresAt: new Date(Date.now() + expiresInMs),
-    });
+  const add = (id: string, socket = fakeSocket()): Connection =>
+    registry.add({ socket, userId: `u-${id}`, sessionId: id });
   return { registry, service, existingIds, add };
 }
 
@@ -76,16 +68,6 @@ describe('HeartbeatService', () => {
     expect(socket.ping).toHaveBeenCalledTimes(2);
   });
 
-  it('closes with 4401 when expiresAt has passed', async () => {
-    const { service, add, registry } = setup();
-    const socket = fakeSocket();
-    add('s1', socket, -1);
-    await service.tick();
-    expect(socket.close).toHaveBeenCalledWith(4401, 'session_ended');
-    expect(socket.ping).not.toHaveBeenCalled();
-    expect(registry.all()).toHaveLength(0);
-  });
-
   it('closes with 4401 instead of terminating when the session ended and the pong was missed', async () => {
     const { service, add } = setup(['s1']);
     const socket = fakeSocket();
@@ -119,10 +101,15 @@ describe('HeartbeatService', () => {
 
   it('does not close anyone when the session lookup fails', async () => {
     const { service, add, existingIds } = setup();
+    const logError = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     existingIds.mockRejectedValueOnce(new Error('db down'));
     const socket = fakeSocket();
     add('s1', socket);
     await expect(service.tick()).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('db down'));
+    logError.mockRestore();
     expect(socket.close).not.toHaveBeenCalled();
     expect(socket.ping).toHaveBeenCalledTimes(1);
   });

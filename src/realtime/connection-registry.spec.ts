@@ -30,7 +30,6 @@ const conn = (socket: WsLike, userId: string) => ({
   socket,
   userId,
   sessionId: `s-${userId}`,
-  expiresAt: new Date(Date.now() + 60_000),
 });
 
 describe('ConnectionRegistry', () => {

@@ -330,7 +330,6 @@ describe('WebSocket handshake and frames (e2e)', () => {
         },
         userId: alice.userId,
         sessionId: 'fake',
-        expiresAt: new Date(Date.now() + 60_000),
       });
 
       await sendMessage(alice, chat.id).expect(201);
@@ -397,6 +396,29 @@ describe('WebSocket lifecycle (e2e)', () => {
       data: { expiresAt: new Date(Date.now() + 300) },
     });
     const tab = await connectWs(app, { cookie: alice.cookie });
+    expect((await tab.closed).code).toBe(4401);
+  });
+
+  it('keeps a socket alive past the handshake expiry once the session was extended in the DB', async () => {
+    await startApp();
+    await prisma.session.updateMany({
+      data: { expiresAt: new Date(Date.now() + 300) },
+    });
+    const tab = await connectWs(app, { cookie: alice.cookie });
+    await prisma.session.updateMany({
+      data: { expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(tab.socket.readyState).toBe(1);
+    tab.close();
+  });
+
+  it('closes a socket with 4401 when the session expiry in the DB moves into the past', async () => {
+    await startApp();
+    const tab = await connectWs(app, { cookie: alice.cookie });
+    await prisma.session.updateMany({
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
     expect((await tab.closed).code).toBe(4401);
   });
 

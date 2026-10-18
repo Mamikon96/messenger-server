@@ -96,7 +96,11 @@ export class SessionsService {
   async existingIds(ids: string[]): Promise<Set<string>> {
     if (ids.length === 0) return new Set();
     const rows = await this.prisma.session.findMany({
-      where: { id: { in: ids }, user: { disabledAt: null } },
+      where: {
+        id: { in: ids },
+        expiresAt: { gt: new Date() },
+        user: { disabledAt: null },
+      },
       select: { id: true },
     });
     return new Set(rows.map((row) => row.id));
