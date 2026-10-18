@@ -1,8 +1,8 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ 1a8f827+dirty
+> Проверено: 2026-10-18 @ a739f33+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
-Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
+Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
 - **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
@@ -16,7 +16,7 @@
   - Вне рамок: автоопределение типа изменения в `accept.sh`; BE-60, BE-61; правки `src/`.
   - Затрагивает: `CLAUDE.md`, `.ai/rules/`, `.ai/memory/README.md`, `.claude/agents/`, `scripts/check-sync.mjs` (+ spec); контракт API: нет; схема БД: нет.
   - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; ревью `nestjs-reviewer` нужно (затронуты `scripts/` и `.claude/`).
-  - Осталось: приёмка (accept.sh), ревью nestjs-reviewer, push и PR.
+  - Осталось: повторное ревью фикса MAJOR (acceptance.md, tasks.md:5), затем закрытие, push и PR.
 
 ## Бэклог
 - **BE-51 (P1)** Группа без участников: memberIds — min(0), default [], max (FE-D45)
