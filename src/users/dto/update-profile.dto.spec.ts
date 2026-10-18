@@ -25,6 +25,36 @@ describe('updateProfileSchema', () => {
     ]);
   });
 
+  it('gives invalid_format for control, separator, bidi override and lone surrogate characters', () => {
+    for (const bad of ['a\u0000b', 'a\nb', 'a b', 'a‮b', 'a\ud800b']) {
+      expect(detailsOf({ firstName: bad })).toEqual([
+        { field: 'firstName', code: 'invalid_format' },
+      ]);
+      expect(detailsOf({ lastName: bad })).toEqual([
+        { field: 'lastName', code: 'invalid_format' },
+      ]);
+    }
+    expect(parse({ firstName: 'Анна 😀', lastName: 'שלום' }).success).toBe(
+      true,
+    );
+  });
+
+  it('checks the trimmed value: a separator at the edge is trimmed, not rejected', () => {
+    expect(parse({ firstName: ' A ' }).data).toEqual({
+      firstName: 'A',
+    });
+  });
+
+  it('prefers required and too_long over invalid_format per field', () => {
+    expect(detailsOf({ firstName: 'a\u0000'.repeat(40) })).toEqual([
+      { field: 'firstName', code: 'too_long' },
+    ]);
+    expect(detailsOf({ firstName: 5, lastName: 'a\u0000b' })).toEqual([
+      { field: 'firstName', code: 'required' },
+      { field: 'lastName', code: 'invalid_format' },
+    ]);
+  });
+
   it('wrong type, empty or blank firstName is required; lastName is required only for the wrong type', () => {
     expect(detailsOf({ firstName: 5, lastName: null })).toEqual([
       { field: 'firstName', code: 'required' },

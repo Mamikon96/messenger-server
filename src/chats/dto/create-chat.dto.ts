@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { chatTitle } from './chat-title.js';
 
 const directSchema = z.object({
   type: z.literal('direct'),
@@ -7,7 +8,7 @@ const directSchema = z.object({
 
 const groupSchema = z.object({
   type: z.literal('group'),
-  title: z.string().trim().min(1).max(100),
+  title: chatTitle,
   memberIds: z
     .array(z.uuid())
     .max(1000)

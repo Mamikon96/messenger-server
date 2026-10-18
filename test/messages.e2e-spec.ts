@@ -151,6 +151,13 @@ describe('Messages (e2e)', () => {
       expect(res.body.seq).toBe(1);
     });
 
+    it('keeps line breaks, tabs, emoji and bidi marks in the body', async () => {
+      const { alice, chatId } = await directChat();
+      const body = 'a\r\nb\n\tc 😀 \u200fשל';
+      const res = await send(alice, chatId, msg(body)).expect(201);
+      expect(res.body.body).toBe(body);
+    });
+
     it('returns 404 to a non-member and for an unknown chat, 400 for a bad uuid', async () => {
       const { chatId } = await directChat();
       const stranger = await loginAs(app);
@@ -170,6 +177,15 @@ describe('Messages (e2e)', () => {
       ['whitespace-only body', { clientId: randomUUID(), body: '  \n\t ' }],
       ['body too long', { clientId: randomUUID(), body: 'x'.repeat(21) }],
       ['body with NUL', { clientId: randomUUID(), body: 'a\u0000b' }],
+      [
+        'body with another C0 character',
+        { clientId: randomUUID(), body: 'a\u0007b' },
+      ],
+      ['body with DEL', { clientId: randomUUID(), body: 'a\u007fb' }],
+      [
+        'body with a C1 character',
+        { clientId: randomUUID(), body: 'a\u0085b' },
+      ],
       [
         'body with a lone surrogate',
         { clientId: randomUUID(), body: 'a\ud800b' },

@@ -233,6 +233,10 @@ describe('Chats (e2e)', () => {
       { type: 'group', title: '   ', memberIds: [a.userId] },
       { type: 'group', title: 'x'.repeat(101), memberIds: [a.userId] },
       { type: 'group', memberIds: [a.userId] },
+      { type: 'group', title: 'a\u0000b', memberIds: [a.userId] },
+      { type: 'group', title: 'a\nb', memberIds: [a.userId] },
+      { type: 'group', title: 'a\u202eb', memberIds: [a.userId] },
+      { type: 'group', title: 'a\ud800b', memberIds: [a.userId] },
       { type: 'group', title: 'T', memberIds: null },
       { type: 'group', title: 'T', memberIds: [a.userId, a.userId] },
       { type: 'group', title: 'T', memberIds: ['not-a-uuid'] },
@@ -679,12 +683,21 @@ describe('Chats (e2e)', () => {
         { title: '' },
         { title: '   ' },
         { title: 'x'.repeat(101) },
+        { title: 'a\u0000b' },
+        { title: 'a\tb' },
+        { title: 'a\u2028b' },
+        { title: 'a\u202eb' },
+        { title: 'a\ud800b' },
         {},
         { title: 5 },
       ]) {
         const res = await renameChat(owner, chat.id, body).expect(400);
         expect(res.body.error.code).toBe('validation_failed');
+        expect(res.body.error).not.toHaveProperty('details');
       }
+      expect(
+        (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } })).title,
+      ).toBe('Old');
       const bad = await renameChat(owner, 'not-a-uuid', { title: 'X' }).expect(
         400,
       );

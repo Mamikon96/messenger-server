@@ -74,6 +74,8 @@ describe('Users (e2e)', () => {
       ['repeated q', '?q=al&q=bo'],
       ['NUL', '?q=a%00b'],
       ['a control character', '?q=a%07b'],
+      ['a line separator', '?q=a%E2%80%A8b'],
+      ['a bidi override', '?q=a%E2%80%AEb'],
       ['limit 0', '?q=al&limit=0'],
       ['limit 51', '?q=al&limit=51'],
       ['limit not a number', '?q=al&limit=abc'],

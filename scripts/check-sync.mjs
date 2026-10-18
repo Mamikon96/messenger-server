@@ -229,9 +229,11 @@ export function runChecks(root) {
   const buffered = srcText('src/realtime/connection-registry.ts').match(/MAX_BUFFERED_BYTES\s*=\s*([\d_]+)/)?.[1];
   if (buffered) facts.push(['MAX_BUFFERED_BYTES', `${Number(buffered.replaceAll('_', '')) / 1048576} МиБ`]);
   else fail('src/realtime/connection-registry.ts: не найден MAX_BUFFERED_BYTES');
-  const title = srcText('src/chats/dto/create-chat.dto.ts').match(/title:.*\.max\((\d+)\)/)?.[1];
-  const titleRename = srcText('src/chats/dto/rename-chat.dto.ts').match(/title:.*\.max\((\d+)\)/)?.[1];
-  if (!title || title !== titleRename) fail('src/chats/dto: предел длины title в create-chat и rename-chat должен совпадать');
+  const title = srcText('src/chats/dto/chat-title.ts').match(/\.max\((\d+)\)/)?.[1];
+  const usesTitle = ['create-chat', 'rename-chat'].every((f) =>
+    /title: chatTitle\b/.test(srcText(`src/chats/dto/${f}.dto.ts`)),
+  );
+  if (!title || !usesTitle) fail('src/chats/dto: title в create-chat и rename-chat должен быть общей схемой chatTitle (chat-title.ts)');
   else facts.push(['title.max', `1..${title}`]);
   const list = srcText('src/messages/dto/list-messages.dto.ts');
   const maxLimit = list.match(/MAX_LIMIT\s*=\s*(\d+)/)?.[1];

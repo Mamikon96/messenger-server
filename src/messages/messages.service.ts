@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
+import { containsForbiddenChars } from '../common/text-input.js';
 import { ChatAccess } from '../chats/chat-access.js';
 import { CHAT_EVENTS, type ChatEventsPublisher } from '../chats/chat-events.js';
 import { type ChatMessageDto, toChatMessageDto } from '../chats/chat.mapper.js';
@@ -13,9 +14,6 @@ export interface MessagePageDto {
   messages: ChatMessageDto[];
   hasMore: boolean;
 }
-
-const LONE_SURROGATE =
-  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 @Injectable()
 export class MessagesService {
@@ -149,19 +147,11 @@ export class MessagesService {
   }
 
   private validateBody(body: string): void {
-    if (body.includes('\u0000')) {
+    if (containsForbiddenChars(body, 'multiline')) {
       throw new AppError(
         400,
         'validation_failed',
-        'body must not contain NUL characters',
-      );
-    }
-    // Одиночный суррогат не кодируется в UTF-8 и ломает запись в PostgreSQL.
-    if (LONE_SURROGATE.test(body)) {
-      throw new AppError(
-        400,
-        'validation_failed',
-        'body must be well-formed Unicode',
+        'body must not contain control characters or malformed Unicode',
       );
     }
     if (body.trim().length === 0) {
