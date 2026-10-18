@@ -1,12 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-19 @ 45b0453
+> Проверено: 2026-10-19 @ 41b524f
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **chore archive-be-46** Архивация BE-46 (смержен в PR #38, остался в «В работе») и предел индекса `tasks-archive.md` 8 → 12 КБ (`check-sync.mjs`, `check-sync.spec.mjs`, `memory/README.md`).
-  - Осталось: `bash scripts/check-fast.sh`, коммит, push, PR; BE-43 — следующая задача.
+_(пусто)_
 
 ## Бэклог
 - **BE-64 (P3)** markRead после удаления чата или участника отдаёт 400 «seq is beyond the last message» вместо 404 (гонка без блокировки)
