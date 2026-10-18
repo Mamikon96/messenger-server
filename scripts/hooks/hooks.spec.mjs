@@ -63,6 +63,14 @@ describe('hooks', () => {
       expect(run('protect.mjs', { tool_input: { file_path: statePath(), content: `# Новое\n${AUTO.replace('код 0', 'код 1')}\n` } }).status).toBe(2);
     });
 
+    it('blocks manual edits of the generated decisions index and allows decisions/ topic files', () => {
+      const index = run('protect.mjs', { tool_input: { file_path: join(dir, '.ai/memory/decisions.md'), new_string: 'x' } });
+      expect(index.status).toBe(2);
+      expect(index.stderr).toMatch(/decisions-index/);
+      expect(run('protect.mjs', { tool_input: { file_path: join(dir, '.ai/memory/decisions.md'), content: 'x' } }).status).toBe(2);
+      expect(run('protect.mjs', { tool_input: { file_path: join(dir, '.ai/memory/decisions/stack.md'), new_string: 'x' } }).status).toBe(0);
+    });
+
     describe.each(['state.md', 'tasks.md', 'architecture.md'])('stamp line in %s', (name) => {
       const STAMP = '> Проверено: 2026-10-10 @ abc1234';
       const path = () => join(dir, '.ai/memory', name);

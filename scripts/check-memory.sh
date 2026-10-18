@@ -74,12 +74,7 @@ check_side() {
 
 check_side BE
 
-# Решения: SH-Dxx и BE-Dxx, ID уникальные
-if [ -f "$MEM/decisions.md" ]; then
-  sh_ids=$(grep -oE '^## [A-Z]+-D[0-9]+' "$MEM/decisions.md" | sed 's/^## //')
-  [ -z "$(echo "$sh_ids" | sort | uniq -d)" ] || fail "$MEM/decisions.md: повторяющиеся ID"
-  [ -z "$(echo "$sh_ids" | grep -vE '^(SH|BE)-D[0-9]+$' || true)" ] || fail "$MEM/decisions.md: ID не вида SH-Dxx/BE-Dxx"
-fi
+# Решения (.ai/memory/decisions/*.md и индекс decisions.md): ID, темы и индекс проверяет scripts/check-sync.mjs через scripts/decisions-index.mjs (SH-D23)
 
 # Актуальность: изменённые (относительно HEAD) файлы кода не должны быть новее tasks.md — память обновляют после любых правок
 tasks="$MEM/tasks.md"

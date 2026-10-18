@@ -55,6 +55,8 @@ describe('check-sync', () => {
     ['an array column missing from the spec', 'prisma/schema.prisma', (t) => t.replace('  name         String\n', '  name         String\n  tags       String[]  @map("tags")\n'), /tags/],
     ['a DB column missing from the spec', 'prisma/schema.prisma', (t) => t.replace('@map("last_read_seq")', '@map("last_read_seq2")'), /last_read_seq2/],
     ['a DTO field missing from the client doc', 'docs/client-integration.md', (t) => t.replace('`body`, `createdAt` |', '`body`, `created` |'), /ChatMessageDto/],
+    ['a hand-edited decisions index', '.ai/memory/decisions.md', (t) => `${t}\n| BE-D998 | левак | действует |\n`, /decisions\.md.*не совпадает/],
+    ['a decision ID repeated across theme files', '.ai/memory/decisions/stack.md', (t) => `${t}\n## SH-D01 — Дубль (2026-10-18)\n- **Решение:** x\n`, /повторяющийся ID SH-D01/],
     ['a reference to a decision that does not exist', SPEC, (t) => `${t}\nСм. BE-D999.\n`, /BE-D999/],
     ['a reference to a task that does not exist', '.ai/memory/state.md', (t) => `${t}\nСм. BE-999.\n`, /BE-999/],
     ['an unconditional Secure cookie claim', SPEC, (t) => t.replace('`HttpOnly; SameSite=Lax`', '`HttpOnly; Secure; SameSite=Lax`'), /Secure/],

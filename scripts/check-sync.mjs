@@ -5,11 +5,11 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkDecisions, parseDecisions } from './decisions-index.mjs';
 
 const SPEC = 'docs/contract.md';
 const CLIENT = 'docs/client-integration.md';
 const ARCH = '.ai/memory/architecture.md';
-const DECISIONS = '.ai/memory/decisions.md';
 const TASKS = '.ai/memory/tasks.md';
 const TASKS_ARCHIVE = '.ai/memory/tasks-archive.md';
 const BACKLOG_DIR = '.ai/memory/backlog';
@@ -60,7 +60,6 @@ export function runChecks(root) {
   const spec = need(SPEC);
   const client = need(CLIENT);
   const arch = need(ARCH);
-  const decisions = need(DECISIONS);
   const tasks = need(TASKS);
   const archive = need(TASKS_ARCHIVE);
 
@@ -252,7 +251,9 @@ export function runChecks(root) {
   }
 
   // ---------- 8. Решения и задачи: ссылки существуют ----------
-  const decisionIds = new Set([...decisions.matchAll(/^## ((?:SH|BE)-D\d+)\b/gm)].map((m) => m[1]));
+  // Решения лежат по темам в .ai/memory/decisions/, decisions.md — генерируемый индекс (SH-D23)
+  for (const e of checkDecisions(root)) fail(e);
+  const decisionIds = new Set(parseDecisions(root).entries.map((e) => e.id));
   const backlogFiles = existsSync(path(BACKLOG_DIR)) ? readdirSync(path(BACKLOG_DIR)).filter((f) => f.endsWith('.md')) : [];
   const taskIds = new Set([...`${tasks}\n${archive}\n${backlogFiles.join('\n')}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
   const scanned = [
@@ -261,7 +262,7 @@ export function runChecks(root) {
     'CLAUDE.md', '.env.example',
   ].filter((f, i, a) => a.indexOf(f) === i && read(f) !== null);
   for (const f of scanned) {
-    if (f === 'scripts/check-sync.mjs' || f === 'scripts/check-sync.spec.mjs') continue;
+    if (['scripts/check-sync.mjs', 'scripts/check-sync.spec.mjs', 'scripts/decisions-index.spec.mjs'].includes(f)) continue;
     const text = read(f);
     for (const m of text.matchAll(/\b((?:SH|BE)-D\d+)\b/g)) {
       if (!decisionIds.has(m[1])) fail(`${f}: ссылка на несуществующее решение ${m[1]}`);

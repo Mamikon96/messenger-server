@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse (Edit|Write): агент не правит секреты, применённые миграции, строку «Автоприёмка» в state.md (SH-D15) и штамп «Проверено» (SH-D19).
+// PreToolUse (Edit|Write): агент не правит секреты, применённые миграции, индекс decisions.md (SH-D23), строку «Автоприёмка» в state.md (SH-D15) и штамп «Проверено» (SH-D19).
 // Код 2 блокирует вызов инструмента, stderr уходит агенту как причина.
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -14,6 +14,9 @@ const deny = (msg) => {
 if (/(^|\/)\.env(\.local)?$/.test(file)) deny('Секреты (.env) агент не редактирует; шаблон — .env.example.');
 if (/\/prisma\/migrations\/[^/]+\/migration\.sql$/.test(file) && existsSync(file)) {
   deny('Применённую миграцию менять нельзя — создай новую миграцию (.ai/rules/code-style.md).');
+}
+if (file.endsWith('.ai/memory/decisions.md')) {
+  deny('decisions.md — генерируемый индекс (SH-D23): правь тему в .ai/memory/decisions/<тема>.md и запусти node scripts/decisions-index.mjs.');
 }
 // Строки, которые пишут только скрипты: «Автоприёмка» в state.md (accept.sh) и штамп «Проверено» в state/tasks/architecture (stamp-memory.mjs).
 const guarded = (re, msg) => {
