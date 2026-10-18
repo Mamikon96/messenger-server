@@ -34,6 +34,7 @@ Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + 
 | Закрытые задачи (история) | `.ai/memory/tasks-archive.md` — индекс (строка на задачу), `grep` по нему, затем нужный `.ai/memory/archive/<слаг>.md` |
 | Финальный отчёт | `.ai/rules/report-format.md` |
 | Сомнение / не хватает данных (любая задача) | `.ai/rules/ask-user.md` |
+| Чтение больших файлов, экономия контекста | `.ai/rules/workflow.md` §5 (`Read` с `limit`/`grep -n`, не `cat`) |
 | Правка структуры памяти и харнеса | `.ai/memory/README.md`, `scripts/check-memory.sh`, `scripts/check-sync.mjs` |
 
 ## Неснимаемые правила (детали — в файлах выше)
