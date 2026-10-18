@@ -1,5 +1,5 @@
 # Архитектура backend
-> Проверено: 2026-10-18 @ c776eed+dirty
+> Проверено: 2026-10-18 @ c16694e+dirty
 
 Фазы 1–4 реализованы: каркас, схема БД, auth, чаты и участники, сообщения и история, WebSocket-доставка (спека `docs/contract.md`). Целевые слои и соглашения — `product-agreements.md`.
 
@@ -21,7 +21,7 @@
 ## Эндпоинты (все под `/api`)
 - Auth: `POST /auth/register`, `POST /auth/login` (публичные: `OriginGuard` + `AuthRateLimitGuard`), `GET /auth/session`, `POST /auth/logout`, `POST /auth/logout-all`.
 - Сообщения (фаза 3): `POST /chats/:id/messages`, `GET /chats/:id/messages` (`before`/`since`/`limit`), `POST /chats/:id/read`.
-- Чаты (фаза 2): `GET /chats`, `POST /chats`, `GET /chats/:id`, `PATCH /chats/:id`, `POST /chats/:id/members`, `DELETE /chats/:id/members/:userId`. Формы и коды — §2 спеки.
+- Чаты (фаза 2): `GET /chats`, `POST /chats`, `GET /chats/:id`, `PATCH /chats/:id`, `DELETE /chats/:id` (BE-52: каскад, `chat.removed` всем участникам включая owner), `POST /chats/:id/members`, `DELETE /chats/:id/members/:userId`. Формы и коды — §2 спеки.
 - `GET /users`, `PATCH /me`, `POST /me/password`; админ: `GET /admin/users`, `PATCH /admin/users/:id`.
 - WebSocket: `GET /ws` (без префикса `/api`).
 

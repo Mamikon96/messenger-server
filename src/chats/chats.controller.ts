@@ -74,6 +74,16 @@ export class ChatsController {
     return this.chats.addMember(session.userId, id, dto.userId);
   }
 
+  /** Удаление группы владельцем: участники, сообщения — каскадом. */
+  @Delete(':id')
+  @HttpCode(204)
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentSession() session: RequestSession,
+  ): Promise<void> {
+    return this.chats.remove(session.userId, id);
+  }
+
   /** Участник выходит (`:userId` — он сам) или owner удаляет участника. */
   @Delete(':id/members/:userId')
   @HttpCode(204)
