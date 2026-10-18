@@ -3,6 +3,7 @@
 // - задача ушла в архив в этой сессии — следующий промпт блокируется с требованием /clear;
 // - контекст последнего ответа больше порога модели — главная сессия останавливается (промпт блокируется, инструменты запрещены,
 //   кроме записи «Осталось» и проверки памяти), субагент теряет инструменты и возвращает отчёт, который сохраняется в handoff;
+// - контекст последнего ответа ≥ 70% порога — один раз за сессию предупреждение в контекст (BE-63), промпт не блокируется;
 // - префикс `!continue` пропускает промпт и снимает запрет инструментов до следующего промпта.
 // Состояние сессий — во временном каталоге вне репозитория (SESSION_GUARD_DIR), handoff — в .claude/handoff/ (в .gitignore): файл на остановленного агента, захват переименованием в `_active`, срок 24 ч.
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 const TAIL_BYTES = 512 * 1024;
 const MAX_TAIL_BYTES = 64 * 1024 * 1024;
 const BYPASS = '!continue';
+const WARN_SHARE = 0.7;
 const HANDOFF_TTL = 24 * 3_600_000;
 const CLAIM_TTL = 2 * 3_600_000;
 
@@ -197,8 +199,23 @@ try {
         emit({ decision: 'block', reason: `Стоп: задача закрыта в этой сессии — сделай /clear и начни следующую в новой сессии (обход: промпт с «${BYPASS}»).` });
         break;
       }
-      const ctx = overLimit(input.transcript_path);
-      if (ctx) emit({ decision: 'block', reason: `Сессия исчерпана: ${describe(ctx)}. Сделай /clear и продолжи в новой сессии по «Осталось» в tasks.md (обход: промпт с «${BYPASS}»).` });
+      const ctx = lastContext(input.transcript_path);
+      if (ctx && ctx.tokens > ctx.limit) {
+        emit({ decision: 'block', reason: `Сессия исчерпана: ${describe(ctx)}. Сделай /clear и продолжи в новой сессии по «Осталось» в tasks.md (обход: промпт с «${BYPASS}»).` });
+        break;
+      }
+      // Раннее предупреждение (BE-63): один раз за сессию, когда контекст дошёл до WARN_SHARE порога; промпт не блокируется.
+      const warned = statePath(`${sid}.warned`);
+      if (ctx && ctx.tokens >= ctx.limit * WARN_SHARE && !existsSync(warned)) {
+        mkdirSync(stateDir, { recursive: true });
+        writeFileSync(warned, '');
+        emit({
+          hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext: `Контекст ${ctx.tokens} токенов — ${Math.round(WARN_SHARE * 100)}% порога ${ctx.limit} (${ctx.model}). Заверши текущую задачу и обнови «Осталось» в tasks.md, затем скажи пользователю сделать /clear.`,
+          },
+        });
+      }
       break;
     }
     case 'PreToolUse': {

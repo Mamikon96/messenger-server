@@ -314,6 +314,53 @@ describe('hooks', () => {
       });
     });
 
+    describe('early context warning in the main session', () => {
+      const warning = (r) => out(r).hookSpecificOutput?.additionalContext;
+      beforeEach(() => guard({ hook_event_name: 'SessionStart', source: 'startup' }));
+
+      it.each([
+        ['opus at 105 000 (70%)', 'claude-opus-5-5', 105_000, true],
+        ['opus at 104 999', 'claude-opus-5-5', 104_999, false],
+        ['sonnet at 63 000 (70%)', 'claude-sonnet-5-5', 63_000, true],
+        ['sonnet at 62 999', 'claude-sonnet-5-5', 62_999, false],
+      ])('prompt: %s → warned=%s', (_name, model, tokens, warned) => {
+        mainTranscript(model, tokens);
+        const r = prompt('дальше');
+        expect(out(r).decision).toBeUndefined();
+        if (warned) expect(warning(r)).toMatch(/\/clear/);
+        else expect(warning(r)).toBeUndefined();
+      });
+
+      it('names the context size and the threshold', () => {
+        mainTranscript('claude-sonnet-5-5', 70_000);
+        expect(warning(prompt('дальше'))).toMatch(/70000.*90000/);
+      });
+
+      it('warns once per session', () => {
+        mainTranscript('claude-sonnet-5-5', 70_000);
+        expect(warning(prompt('дальше'))).toBeDefined();
+        expect(warning(prompt('ещё'))).toBeUndefined();
+      });
+
+      it('blocks instead of warning above the threshold', () => {
+        mainTranscript('claude-sonnet-5-5', 95_000);
+        const r = prompt('дальше');
+        expect(out(r).decision).toBe('block');
+        expect(warning(r)).toBeUndefined();
+      });
+
+      it('stays silent after a compaction and for !continue', () => {
+        mainTranscript('claude-sonnet-5-5', 70_000);
+        expect(warning(prompt('!continue дальше'))).toBeUndefined();
+        writeFileSync(join(dir, `${SID}.jsonl`), `${readFileSync(join(dir, `${SID}.jsonl`), 'utf8')}${JSON.stringify({ type: 'system', subtype: 'compact_boundary' })}\n`);
+        expect(warning(prompt('дальше'))).toBeUndefined();
+      });
+
+      it('does not warn on a missing transcript', () => {
+        expect(warning(prompt('дальше'))).toBeUndefined();
+      });
+    });
+
     it.each(['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'SubagentStart', 'SubagentStop'])('exits 0 silently on garbage input (%s)', () => {
       const r = spawnSync('node', [hook('session-guard.mjs')], { input: 'not json', encoding: 'utf8', env: { ...process.env, ...env() } });
       expect(r.status).toBe(0);
