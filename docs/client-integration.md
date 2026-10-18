@@ -207,7 +207,7 @@ Query (необязательны; только десятичные целые 
 
 ### 3.11. Админка: пользователи (справочно)
 Клиент не знает, админ ли пользователь (SH-D12), поэтому админ-UI показывается по ответу: `403 forbidden` — не админ. Нужны сессия, CSRF и права админа.
-- `GET /api/admin/users` → `200 AdminUserItem[]`: все пользователи, включая отключённых, по `name`.
+- `GET /api/admin/users` → `200 AdminUserItem[]`: все пользователи, включая отключённых, по `name`. `login`, `firstName`, `lastName` видны только админу (и самому пользователю в `SessionUser`).
 - `PATCH /api/admin/users/:id` `{ "isAdmin"?: boolean, "disabled"?: boolean }` (хотя бы одно поле, иначе `400`) → `200 AdminUserItem`. Изменить себя нельзя (`403 forbidden`), нет пользователя — `404`. `disabled: true` удаляет все сессии пользователя (его сокеты закроются `4401` ≤ 30 с), скрывает его из `GET /api/users` и запрещает вход (`403 user_disabled`); `disabled: false` включает обратно.
 
 ### 3.12. `PATCH /api/me` (CSRF)
@@ -235,7 +235,7 @@ Query (необязательны; только десятичные целые 
 | `ChatDto` | `id`, `type: "direct" \| "group"`, `title: string \| null` (direct — всегда `null`, group — всегда строка), `lastSeq`, `members: ChatMemberDto[]` (в чате с собой один элемент) |
 | `ChatListItemDto` | `id`, `type`, `title`, `lastSeq`, `lastMessage: ChatMessageDto \| null`, `unreadCount`, `peer?: {id, name, avatarUrl}` (только direct) |
 | `ChatMessageDto` (REST и `message.new`) | `chatId`, `seq`, `senderId`, `clientId`, `body`, `createdAt` |
-| `AdminUserItem` | `id`, `name`, `avatarUrl`, `isAdmin: boolean`, `disabledAt: string \| null` |
+| `AdminUserItem` | `id`, `login`, `firstName`, `lastName`, `name`, `avatarUrl`, `isAdmin: boolean`, `disabledAt: string \| null` |
 
 Имени отправителя в сообщении нет — брать из `members` чата или `/users`. Отключённый участник остаётся в `members`/`peer`, но пропадает из `/users`. `name` обычно непустой, но `""` не исключён (8б.8).
 
