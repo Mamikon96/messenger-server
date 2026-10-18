@@ -18,7 +18,7 @@ const TASKS_MAX_BYTES = 5000;
 const BACKLOG_LINE_MAX = 200;
 const CLAUDE_MD_MAX_BYTES = 4000;
 const ARCHIVE_SUMMARY_MAX = 100;
-const ARCHIVE_MAX_BYTES = 8192;
+const ARCHIVE_MAX_BYTES = 12288;
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
 /** Стандартные коды закрытия WebSocket, которых нет в нашем коде (их ставит библиотека `ws`/браузер). */
 const PROTOCOL_CLOSE_CODES = new Set(['1006', '1009']);

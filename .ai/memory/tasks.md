@@ -1,24 +1,12 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ 755b866+dirty
+> Проверено: 2026-10-18 @ 2c9e457+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-46 (P2)** Запрет NUL и управляющих символов во входном тексте
-  - Цель: клиент получает 400 вместо 500 (NUL) и вместо тихой порчи данных (одиночный суррогат) на строковых полях, попадающих в БД; допустимый набор символов един для всех полей.
-  - Критерии приёмки:
-    1. Общий предикат в `src/common/` с двумя профилями. `singleLine`: запрещены весь `\p{Cc}`, U+2028/2029, U+202A–202E, U+2066–2069, одиночные суррогаты. `multiline`: запрещены `\p{Cc}` кроме `\t \n \r` и одиночные суррогаты. Разрешены эмодзи (пары суррогатов), RTL-текст, LRM/RLM/ALM, `\n`/`\t` в `multiline`. Проверка идёт по сохраняемому значению, после trim.
-    2. `PATCH /api/me` (`firstName`, `lastName`) с запрещённым символом → 400 `validation_failed`, `details[field]` = `invalid_format`; приоритет кодов `required` > `too_long` > `invalid_format`.
-    3. `POST /api/chats` и `PATCH /api/chats/:id` (`title`) с запрещённым символом (`singleLine`) → 400 `validation_failed` без `details`; до этого проверка не выполнялась, NUL давал 500.
-    4. `POST /api/chats/:id/messages` (`body`): профиль `multiline` вместо ручных проверок в `messages.service.ts`; `\n`/`\t` проходят, остальные C0/C1 → 400.
-    5. `GET /api/users?q=` (`q`): та же проверка через общий предикат (профиль `singleLine`), поведение для NUL сохраняется.
-    6. `login` и пароли не меняются.
-    7. Красный e2e до реализации подтверждает: NUL в `firstName` и `title` → 500 сейчас, одиночный суррогат → 200 с U+FFFD в БД (проверка гипотезы аналитика).
-  - Вне рамок: `login` и пароли; глобальный pipe и фильтр 22021 → 400; запрет zero-width и noncharacters; клиент.
-  - Затрагивает: `src/common/` (предикат), `users/dto/update-profile.dto.ts`, `search-users.dto.ts`, `chats/dto/create-chat.dto.ts`, `rename-chat.dto.ts`, `messages/messages.service.ts`, e2e `me`/`chats`/`messages`/`users`, `docs/client-integration.md`; контракт API: да (аддитивно: `invalid_format` у `PATCH /me`, новые причины 400); схема БД: нет.
-  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: accept.sh, ревью `nestjs-reviewer`, коммит, push, PR. Сделано: реализация `src/common/text-input.ts`, схемы, BE-D40, docs.
+- **chore archive-be-46** Архивация BE-46 (смержен в PR #38, остался в «В работе») и предел индекса `tasks-archive.md` 8 → 12 КБ (`check-sync.mjs`, `check-sync.spec.mjs`, `memory/README.md`).
+  - Осталось: `bash scripts/check-fast.sh`, коммит, push, PR; BE-43 — следующая задача.
 
 ## Бэклог
 - **BE-64 (P3)** markRead после удаления чата или участника отдаёт 400 «seq is beyond the last message» вместо 404 (гонка без блокировки)
