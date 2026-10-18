@@ -195,6 +195,31 @@ describe('Chats (e2e)', () => {
     expect(event.payload).toEqual(res.body);
   });
 
+  it('creates a group without members for an empty or missing memberIds: only the creator as owner, no event', async () => {
+    const me = await loginAs(app);
+    for (const extra of [{ memberIds: [] }, {}]) {
+      const res = await createChat(me, {
+        type: 'group',
+        title: 'Solo',
+        ...extra,
+      }).expect(201);
+      expect(res.body).toMatchObject({
+        type: 'group',
+        title: 'Solo',
+        lastSeq: 0,
+      });
+      expect(
+        res.body.members.map((m: { userId: string; role: string }) => [
+          m.userId,
+          m.role,
+        ]),
+      ).toEqual([[me.userId, 'owner']]);
+    }
+    expect(await prisma.chat.count()).toBe(2);
+    expect(await prisma.chatMember.count()).toBe(2);
+    expect(recorder.events).toHaveLength(0);
+  });
+
   it('rejects invalid create bodies with 400 validation_failed', async () => {
     const me = await loginAs(app);
     const a = await loginAs(app);
@@ -208,7 +233,7 @@ describe('Chats (e2e)', () => {
       { type: 'group', title: '   ', memberIds: [a.userId] },
       { type: 'group', title: 'x'.repeat(101), memberIds: [a.userId] },
       { type: 'group', memberIds: [a.userId] },
-      { type: 'group', title: 'T', memberIds: [] },
+      { type: 'group', title: 'T', memberIds: null },
       { type: 'group', title: 'T', memberIds: [a.userId, a.userId] },
       { type: 'group', title: 'T', memberIds: ['not-a-uuid'] },
       { type: 'group', title: 'T', memberIds: [a.userId, me.userId] },
@@ -216,6 +241,11 @@ describe('Chats (e2e)', () => {
         type: 'group',
         title: 'T',
         memberIds: Array.from({ length: maxGroupMembers }, () => randomUUID()),
+      },
+      {
+        type: 'group',
+        title: 'T',
+        memberIds: Array.from({ length: 1001 }, () => randomUUID()),
       },
     ];
     for (const body of bodies) {
