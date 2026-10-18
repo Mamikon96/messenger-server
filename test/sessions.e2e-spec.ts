@@ -154,7 +154,9 @@ describe('Sessions (e2e)', () => {
         expect(sid[0]).toContain('Path=/');
         const expires = new Date(/Expires=([^;]+)/.exec(sid[0])![1]).getTime();
         expect(Math.abs(expires - (Date.now() + TTL_MS))).toBeLessThan(5_000);
-        expect(Math.abs((await expiresOf(token)) - (Date.now() + TTL_MS))).toBeLessThan(5_000);
+        expect(
+          Math.abs((await expiresOf(token)) - (Date.now() + TTL_MS)),
+        ).toBeLessThan(5_000);
       });
 
       it('does not write or set a cookie again within the same day', async () => {
@@ -193,7 +195,9 @@ describe('Sessions (e2e)', () => {
           ),
         );
         expect(responses.map((r) => r.status)).toEqual(Array(6).fill(200));
-        expect(responses.filter((r) => setCookies(r).length > 0)).toHaveLength(1);
+        expect(responses.filter((r) => setCookies(r).length > 0)).toHaveLength(
+          1,
+        );
       });
 
       it('authenticate (WebSocket path) does not extend the session', async () => {
@@ -290,6 +294,17 @@ describe('Sessions (e2e)', () => {
       });
       const ids = await sessions.existingIds([hash(token), hash(otherToken)]);
       expect([...ids]).toEqual([hash(otherToken)]);
+    });
+
+    it('existingIds skips sessions whose expiry has passed', async () => {
+      const { token } = await sessions.create(userId);
+      const { token: expiredToken } = await sessions.create(userId);
+      await prisma.session.update({
+        where: { id: hash(expiredToken) },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      const ids = await sessions.existingIds([hash(token), hash(expiredToken)]);
+      expect([...ids]).toEqual([hash(token)]);
     });
 
     it('deletes and rejects an expired session', async () => {

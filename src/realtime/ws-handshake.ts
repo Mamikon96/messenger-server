@@ -4,7 +4,6 @@ import type { IncomingMessage } from 'node:http';
 export interface WsPrincipal {
   userId: string;
   sessionId: string;
-  expiresAt: Date;
 }
 
 export const handshakePrincipals = new WeakMap<IncomingMessage, WsPrincipal>();

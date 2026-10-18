@@ -58,7 +58,6 @@ export class SessionWsAdapter extends WsAdapter {
     handshakePrincipals.set(req, {
       userId: session.userId,
       sessionId: session.sessionId,
-      expiresAt: session.expiresAt,
     });
     return null;
   }

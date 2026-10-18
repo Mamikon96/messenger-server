@@ -19,7 +19,6 @@ export interface Connection {
   socket: WsLike;
   userId: string;
   sessionId: string;
-  expiresAt: Date;
   alive: boolean;
 }
 
