@@ -172,7 +172,7 @@ describe('hooks', () => {
     };
     const archive = (first) => {
       mkdirSync(join(dir, '.ai/memory'), { recursive: true });
-      writeFileSync(join(dir, '.ai/memory/tasks-archive.md'), `# Архив\n\n## Сделано\n- ${first}\n- 2026-01-01 — BE-01: старое\n`);
+      writeFileSync(join(dir, '.ai/memory/tasks-archive.md'), `# Архив\n\n## Сделано\n- ${first}\n- 2026-01-01 — [BE-01](archive/BE-01.md): старое\n`);
     };
     const assistant = (model, tokens) =>
       JSON.stringify({ type: 'assistant', message: { model, usage: { input_tokens: 10, cache_read_input_tokens: tokens - 30, cache_creation_input_tokens: 20, output_tokens: 5 } } });
@@ -186,12 +186,12 @@ describe('hooks', () => {
     const tool = (tool_name, tool_input, extra = {}) => guard({ hook_event_name: 'PreToolUse', tool_name, tool_input, ...extra });
     const denied = (r) => out(r).hookSpecificOutput?.permissionDecision === 'deny';
 
-    beforeEach(() => archive('2026-10-15 — BE-39: задача'));
+    beforeEach(() => archive('2026-10-15 — [BE-39](archive/BE-39.md): задача'));
 
     describe('closed task in this session', () => {
       it('blocks the prompt when the archive got a new first entry after session start', () => {
         expect(guard({ hook_event_name: 'SessionStart', source: 'startup' }).status).toBe(0);
-        archive('2026-10-16 — BE-48: закрыта');
+        archive('2026-10-16 — [BE-48](archive/BE-48.md): закрыта');
         const r = prompt('дальше');
         expect(r.status).toBe(0);
         expect(out(r).decision).toBe('block');
@@ -205,27 +205,27 @@ describe('hooks', () => {
 
       it('lets a prompt starting with !continue through', () => {
         guard({ hook_event_name: 'SessionStart', source: 'startup' });
-        archive('2026-10-16 — BE-48: закрыта');
+        archive('2026-10-16 — [BE-48](archive/BE-48.md): закрыта');
         expect(out(prompt('!continue доделай PR')).decision).toBeUndefined();
       });
 
       it('keeps the snapshot on resume and compact', () => {
         guard({ hook_event_name: 'SessionStart', source: 'startup' });
-        archive('2026-10-16 — BE-48: закрыта');
+        archive('2026-10-16 — [BE-48](archive/BE-48.md): закрыта');
         guard({ hook_event_name: 'SessionStart', source: 'resume' });
         guard({ hook_event_name: 'SessionStart', source: 'compact' });
         expect(out(prompt('дальше')).decision).toBe('block');
       });
 
       it('takes a snapshot on resume when the session has none', () => {
-        archive('2026-10-16 — BE-48: закрыта');
+        archive('2026-10-16 — [BE-48](archive/BE-48.md): закрыта');
         guard({ hook_event_name: 'SessionStart', source: 'resume' });
         expect(out(prompt('дальше')).decision).toBeUndefined();
       });
 
       it('retakes the snapshot on clear', () => {
         guard({ hook_event_name: 'SessionStart', source: 'startup' });
-        archive('2026-10-16 — BE-48: закрыта');
+        archive('2026-10-16 — [BE-48](archive/BE-48.md): закрыта');
         guard({ hook_event_name: 'SessionStart', source: 'clear' });
         expect(out(prompt('дальше')).decision).toBeUndefined();
       });

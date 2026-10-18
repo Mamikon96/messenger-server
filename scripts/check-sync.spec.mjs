@@ -36,6 +36,13 @@ describe('check-sync', () => {
     writeFileSync(join(dir, `.ai/memory/backlog/${id}.md`), text);
   };
   const backlogLine = (id) => `- **${id} (P3)** Задача\n`;
+  const ARCHIVE_INDEX = '.ai/memory/tasks-archive.md';
+  const archiveLine = (id, summary = 'Задача.') => `- 2026-01-02 — [${id}](archive/${id}.md): ${summary}\n`;
+  const addArchiveFile = (id, text = 'Детали.\n') => {
+    mkdirSync(join(dir, '.ai/memory/archive'), { recursive: true });
+    writeFileSync(join(dir, `.ai/memory/archive/${id}.md`), text);
+  };
+  const addArchiveLine = (line) => edit(ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${line}`));
 
   it('passes on the repository as is', () => {
     expect(runChecks(dir).errors).toEqual([]);
@@ -64,7 +71,10 @@ describe('check-sync', () => {
     ['a second task in progress', '.ai/memory/tasks.md', (t) => inProgress(t, wipTask('BE-998') + wipTask('BE-999')), /WIP = 1/],
     ['a task in progress without an out-of-scope item', '.ai/memory/tasks.md', (t) => inProgress(t, wipTask('BE-998').replace('- Вне рамок:', '- Вне:')), /Вне рамок/],
     ['a done section kept in tasks.md', '.ai/memory/tasks.md', (t) => `${t}\n## Сделано\n- 2026-01-01 — BE-01: тест.\n`, /секция «Сделано» живёт/],
-    ['a task reference that exists nowhere once the archive entry is gone', '.ai/memory/tasks-archive.md', (t) => t.replaceAll('BE-01', 'BE-0'), /product-agreements\.md: ссылка на несуществующую задачу BE-01\b/],
+    ['an archive index line without a date', ARCHIVE_INDEX, (t) => t.replace(/^(## Сделано\n)- \d{4}-\d{2}-\d{2} — /m, '$1- '), /без даты/],
+    ['an archive index line longer than 200 characters', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-01', 'x'.repeat(200))}`), /BE-01.*200/],
+    ['an archive index line without a details file', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-989')}`), /BE-989.*archive\/BE-989\.md/],
+    ['an archive index over the size limit', ARCHIVE_INDEX, (t) => `${t}\n${'я'.repeat(4500)}\n`, /8192/],
     ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => `${t}\nСм. 8б.99.\n`, /8б\.99/],
     ['a backlog line longer than 200 characters', TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n- **BE-998 (P3)** ${'x'.repeat(200)} — детали: backlog/BE-998.md\n`), /BE-998.*200/],
     ['a backlog line without a details file', TASKS, (t) => t.replace(/^## Бэклог\n/m, `## Бэклог\n${backlogLine('BE-997')}`), /BE-997.*backlog\/BE-997\.md/],
@@ -73,6 +83,30 @@ describe('check-sync', () => {
     edit(rel, fn);
     const { errors } = runChecks(dir);
     expect(errors.join('\n')).toMatch(pattern);
+  });
+
+  it('fails on a task reference that exists nowhere once its archive file and index line are gone', () => {
+    rmSync(join(dir, '.ai/memory/archive/BE-01.md'));
+    edit(ARCHIVE_INDEX, (t) => t.replace(/^- .*\[BE-01\].*\n/m, ''));
+    expect(runChecks(dir).errors.join('\n')).toMatch(/product-agreements\.md: ссылка на несуществующую задачу BE-01\b/);
+  });
+
+  it('fails on an archive file that has no line in the index', () => {
+    addArchiveFile('BE-988');
+    expect(runChecks(dir).errors.join('\n')).toMatch(/archive\/BE-988\.md.*(сирота|нет строки)/);
+  });
+
+  it('accepts a task that exists only as an archive file with its index line', () => {
+    addArchiveFile('BE-987');
+    addArchiveLine(archiveLine('BE-987'));
+    edit('.ai/memory/state.md', (t) => `${t}\nСм. BE-987.\n`);
+    expect(runChecks(dir).errors).toEqual([]);
+  });
+
+  it('resolves task references written inside an archive file', () => {
+    addArchiveFile('BE-986', 'Заменила BE-985.\n');
+    addArchiveLine(archiveLine('BE-986'));
+    expect(runChecks(dir).errors.join('\n')).toMatch(/BE-985/);
   });
 
   it('does not count the in-progress section toward the tasks.md size limit', () => {

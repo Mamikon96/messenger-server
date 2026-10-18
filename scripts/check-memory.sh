@@ -63,7 +63,7 @@ check_side() {
 
   fi
 
-  # Архив «Сделано» (.ai/memory/tasks-archive.md): каждая запись начинается с даты
+  # Архив «Сделано» (.ai/memory/tasks-archive.md — индекс): каждая запись начинается с даты (пару «строка ↔ archive/<слаг>.md» проверяет check-sync.mjs)
   if [ -f "$dir/tasks-archive.md" ]; then
     grep -q '^## Сделано' "$dir/tasks-archive.md" || fail "$dir/tasks-archive.md: нет секции '## Сделано'"
     local done_bad

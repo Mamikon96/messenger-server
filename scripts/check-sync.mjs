@@ -13,8 +13,11 @@ const ARCH = '.ai/memory/architecture.md';
 const TASKS = '.ai/memory/tasks.md';
 const TASKS_ARCHIVE = '.ai/memory/tasks-archive.md';
 const BACKLOG_DIR = '.ai/memory/backlog';
+const ARCHIVE_DIR = '.ai/memory/archive';
 const TASKS_MAX_BYTES = 5000;
 const BACKLOG_LINE_MAX = 200;
+const ARCHIVE_LINE_MAX = 200;
+const ARCHIVE_MAX_BYTES = 8192;
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
 /** Стандартные коды закрытия WebSocket, которых нет в нашем коде (их ставит библиотека `ws`/браузер). */
 const PROTOCOL_CLOSE_CODES = new Set(['1006', '1009']);
@@ -255,7 +258,8 @@ export function runChecks(root) {
   for (const e of checkDecisions(root)) fail(e);
   const decisionIds = new Set(parseDecisions(root).entries.map((e) => e.id));
   const backlogFiles = existsSync(path(BACKLOG_DIR)) ? readdirSync(path(BACKLOG_DIR)).filter((f) => f.endsWith('.md')) : [];
-  const taskIds = new Set([...`${tasks}\n${archive}\n${backlogFiles.join('\n')}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
+  const archiveFiles = existsSync(path(ARCHIVE_DIR)) ? readdirSync(path(ARCHIVE_DIR)).filter((f) => f.endsWith('.md')) : [];
+  const taskIds = new Set([...`${tasks}\n${archive}\n${backlogFiles.join('\n')}\n${archiveFiles.join('\n')}`.matchAll(/\bBE-(\d+)\b/g)].map((m) => `BE-${m[1]}`));
   const scanned = [
     ...srcFiles, ...walk('src', (f) => f.endsWith('.spec.ts')), ...walk('test', (f) => f.endsWith('.ts')),
     ...walk('scripts', () => true), ...walk('.ai', (f) => f.endsWith('.md')), ...walk('docs', (f) => f.endsWith('.md')),
@@ -304,6 +308,23 @@ export function runChecks(root) {
   const tasksBytes = Buffer.byteLength(tasks.replace(section(tasks, 'В работе'), ''));
   if (tasksBytes > TASKS_MAX_BYTES) fail(`${TASKS}: ${tasksBytes} байт без секции «В работе», предел ${TASKS_MAX_BYTES} — детали задач выносятся в ${BACKLOG_DIR}/`);
   if (/^## Сделано/m.test(tasks)) fail(`${TASKS}: секция «Сделано» живёт в ${TASKS_ARCHIVE}`);
+  // Архив — индекс строк со ссылками на файлы archive/<слаг>.md (BE-62)
+  const archiveLinked = new Set();
+  for (const line of section(archive, 'Сделано').split('\n').filter((l) => l.startsWith('- '))) {
+    const m = line.match(/^- \d{4}-\d{2}-\d{2} — \[([^\]]+)\]\(archive\/([^)]+\.md)\): \S/);
+    if (!m) {
+      fail(`${TASKS_ARCHIVE}: строка без даты или ссылки вида «- ГГГГ-ММ-ДД — [слаг](archive/слаг.md): суть»: ${line.slice(0, 60)}`);
+      continue;
+    }
+    if ([...line].length > ARCHIVE_LINE_MAX) fail(`${TASKS_ARCHIVE}: строка ${m[1]} длиннее ${ARCHIVE_LINE_MAX} символов — детали в ${ARCHIVE_DIR}/${m[2]}`);
+    if (!archiveFiles.includes(m[2])) fail(`${TASKS_ARCHIVE}: у ${m[1]} нет файла ${ARCHIVE_DIR}/${m[2]}`);
+    else archiveLinked.add(m[2]);
+  }
+  for (const f of archiveFiles) {
+    if (!archiveLinked.has(f)) fail(`${ARCHIVE_DIR}/${f}: сирота — нет строки в индексе ${TASKS_ARCHIVE}`);
+  }
+  const archiveBytes = Buffer.byteLength(archive);
+  if (archiveBytes > ARCHIVE_MAX_BYTES) fail(`${TASKS_ARCHIVE}: ${archiveBytes} байт, предел ${ARCHIVE_MAX_BYTES} — подробности записей живут в ${ARCHIVE_DIR}/`);
 
   // ---------- 10. Внешний репозиторий клиента (только предупреждения) ----------
   const readme = read('.ai/memory/README.md') ?? '';
