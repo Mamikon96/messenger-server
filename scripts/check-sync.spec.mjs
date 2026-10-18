@@ -37,7 +37,7 @@ describe('check-sync', () => {
   };
   const backlogLine = (id) => `- **${id} (P3)** Задача\n`;
   const ARCHIVE_INDEX = '.ai/memory/tasks-archive.md';
-  const archiveLine = (id, summary = 'Задача.') => `- 2026-01-02 — [${id}](archive/${id}.md): ${summary}\n`;
+  const archiveLine = (id, summary = 'Задача.') => `- 2099-01-01 — [${id}](archive/${id}.md): ${summary}\n`;
   const addArchiveFile = (id, text = 'Детали.\n') => {
     mkdirSync(join(dir, '.ai/memory/archive'), { recursive: true });
     writeFileSync(join(dir, `.ai/memory/archive/${id}.md`), text);
@@ -72,7 +72,10 @@ describe('check-sync', () => {
     ['a task in progress without an out-of-scope item', '.ai/memory/tasks.md', (t) => inProgress(t, wipTask('BE-998').replace('- Вне рамок:', '- Вне:')), /Вне рамок/],
     ['a done section kept in tasks.md', '.ai/memory/tasks.md', (t) => `${t}\n## Сделано\n- 2026-01-01 — BE-01: тест.\n`, /секция «Сделано» живёт/],
     ['an archive index line without a date', ARCHIVE_INDEX, (t) => t.replace(/^(## Сделано\n)- \d{4}-\d{2}-\d{2} — /m, '$1- '), /без даты/],
-    ['an archive index line longer than 200 characters', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-01', 'x'.repeat(200))}`), /BE-01.*200/],
+    ['an archive index summary longer than 100 characters', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-01', 'x'.repeat(101))}`), /BE-01.*100/],
+    ['an archive index link text that differs from the file name', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n- 2099-01-01 — [BE-977](archive/BE-01.md): Задача.\n`), /BE-977.*BE-01\.md/],
+    ['two archive index lines for one file', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-01')}${archiveLine('BE-01')}`), /BE-01.*дважды/],
+    ['archive index dates not in descending order', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n- 2000-01-01 — [BE-01](archive/BE-01.md): Задача.\n- 2099-01-01 — [BE-02](archive/BE-02.md): Задача.\n`), /порядок дат/],
     ['an archive index line without a details file', ARCHIVE_INDEX, (t) => t.replace(/^## Сделано\n/m, `## Сделано\n${archiveLine('BE-989')}`), /BE-989.*archive\/BE-989\.md/],
     ['an archive index over the size limit', ARCHIVE_INDEX, (t) => `${t}\n${'я'.repeat(4500)}\n`, /8192/],
     ['a dangling reference to a client open question', 'docs/client-integration.md', (t) => `${t}\nСм. 8б.99.\n`, /8б\.99/],
