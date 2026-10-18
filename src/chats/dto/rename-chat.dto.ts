@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { chatTitle } from './chat-title.js';
 
 export const renameChatSchema = z.object({
-  title: z.string().trim().min(1).max(100),
+  title: chatTitle,
 });
 
 export type RenameChatDto = z.infer<typeof renameChatSchema>;

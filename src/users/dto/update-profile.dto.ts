@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ValidationCode } from '../../common/app-error.js';
+import { containsForbiddenChars } from '../../common/text-input.js';
 
 export interface UpdateProfileDto {
   firstName?: string;
@@ -55,6 +56,9 @@ export const updateProfileSchema = z
         failed = true;
       } else if (lengthOf(text) > NAME_PART_MAX_LENGTH) {
         addIssue(ctx, field, 'too_long', raw);
+        failed = true;
+      } else if (containsForbiddenChars(text, 'singleLine')) {
+        addIssue(ctx, field, 'invalid_format', raw);
         failed = true;
       } else {
         result[field] = text;

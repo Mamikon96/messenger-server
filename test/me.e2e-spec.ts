@@ -195,6 +195,26 @@ describe('PATCH /api/me (e2e)', () => {
         [detail('firstName', 'required')],
       ],
       [
+        'firstName with NUL',
+        { firstName: 'a\u0000b' },
+        [detail('firstName', 'invalid_format')],
+      ],
+      [
+        'lastName with a line break',
+        { lastName: 'a\nb' },
+        [detail('lastName', 'invalid_format')],
+      ],
+      [
+        'firstName with a bidi override',
+        { firstName: 'a\u202eb' },
+        [detail('firstName', 'invalid_format')],
+      ],
+      [
+        'lastName with a lone surrogate',
+        { lastName: 'a\ud800b' },
+        [detail('lastName', 'invalid_format')],
+      ],
+      [
         'valid field and an invalid one',
         { firstName: 'Ok', lastName: 7 },
         [detail('lastName', 'required')],

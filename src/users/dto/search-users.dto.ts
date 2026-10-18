@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { containsForbiddenChars } from '../../common/text-input.js';
 
 const MIN_QUERY = 2;
 const MAX_QUERY = 64;
@@ -8,14 +9,14 @@ const DEFAULT_LIMIT = 20;
 const query = z
   .string()
   .trim()
+  .refine((q) => {
+    const length = [...q].length;
+    return length >= MIN_QUERY && length <= MAX_QUERY;
+  }, `q must be ${MIN_QUERY}..${MAX_QUERY} characters`)
   .refine(
-    (q) => {
-      const length = [...q].length;
-      return length >= MIN_QUERY && length <= MAX_QUERY;
-    },
-    `q must be ${MIN_QUERY}..${MAX_QUERY} characters`,
-  )
-  .refine((q) => !/\p{Cc}/u.test(q), 'q must not contain control characters');
+    (q) => !containsForbiddenChars(q, 'singleLine'),
+    'q must not contain control characters',
+  );
 
 const limit = z
   .string()
