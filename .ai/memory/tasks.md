@@ -1,14 +1,13 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ 167e402+dirty
+> Проверено: 2026-10-18 @ 50636bb+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
-Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
+Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
 - (пусто)
 
 ## Бэклог
-- **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
 - **BE-51 (P1)** Группа без участников: memberIds — min(0), default [], max (FE-D45)
 - **BE-52 (P2)** Удаление группы владельцем: DELETE /api/chats/:id, событие chat.removed (FE-D45)
 - **BE-53 (P2)** GET /api/users без q → 400 (после перехода клиента на поиск)

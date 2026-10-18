@@ -151,4 +151,16 @@ describe('check-sync', () => {
       expect(runChecks(dir).errors.join('\n')).toMatch(/порог контекста.*90000/);
     });
   });
+
+  describe('harness budget', () => {
+    it('fails when CLAUDE.md grows past the byte limit', () => {
+      edit('CLAUDE.md', (t) => `${t}\n${'я'.repeat(2500)}\n`);
+      expect(runChecks(dir).errors.join('\n')).toMatch(/CLAUDE\.md.*предел 4000/);
+    });
+
+    it('fails when context-budget.md is missing', () => {
+      rmSync(join(dir, '.ai/rules/context-budget.md'));
+      expect(runChecks(dir).errors.join('\n')).toMatch(/context-budget\.md/);
+    });
+  });
 });

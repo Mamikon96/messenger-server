@@ -16,6 +16,7 @@ const BACKLOG_DIR = '.ai/memory/backlog';
 const ARCHIVE_DIR = '.ai/memory/archive';
 const TASKS_MAX_BYTES = 5000;
 const BACKLOG_LINE_MAX = 200;
+const CLAUDE_MD_MAX_BYTES = 4000;
 const ARCHIVE_SUMMARY_MAX = 100;
 const ARCHIVE_MAX_BYTES = 8192;
 const METHODS = 'GET|POST|PATCH|PUT|DELETE';
@@ -352,6 +353,11 @@ export function runChecks(root) {
   else if (num(docOpus[1]) !== num(codeLimits[1]) || num(docOpus[2]) !== num(codeLimits[2])) {
     fail(`порог контекста: workflow.md ${num(docOpus[1])}/${num(docOpus[2])}, session-guard.mjs ${num(codeLimits[1])}/${num(codeLimits[2])}`);
   }
+
+  // ---------- 12. Бюджет контекста: CLAUDE.md грузится в каждую сессию (BE-57) ----------
+  const claudeBytes = Buffer.byteLength(read('CLAUDE.md') ?? '');
+  if (claudeBytes > CLAUDE_MD_MAX_BYTES) fail(`CLAUDE.md: ${claudeBytes} байт, предел ${CLAUDE_MD_MAX_BYTES} — детали правил живут в .ai/rules/`);
+  if (read('.ai/rules/context-budget.md') === null) fail('.ai/rules/context-budget.md: нет файла «чего не читать» (на него ссылаются агенты и CLAUDE.md)');
 
   return { errors, warnings };
 }

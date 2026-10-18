@@ -1,6 +1,6 @@
 # Память проекта для AI
 
-Проект — только backend (frontend — отдельный репозиторий `messenger-client-react`, SH-D04). Общий индекс — `.ai/README.md`; правила работы с памятью — `.ai/rules/memory-protocol.md`.
+Проект — только backend (frontend — отдельный репозиторий `messenger-client-react`, SH-D04). Маршрутизатор «задача → файлы» — в `CLAUDE.md`; правила работы с памятью — `.ai/rules/memory-protocol.md`.
 
 ```
 .ai/memory/
