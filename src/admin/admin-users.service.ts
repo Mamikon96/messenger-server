@@ -7,6 +7,9 @@ import type { UpdateUserDto } from './dto/update-user.dto.js';
 
 export interface AdminUserItem {
   id: string;
+  login: string;
+  firstName: string;
+  lastName: string;
   name: string;
   avatarUrl: string;
   isAdmin: boolean;
@@ -15,6 +18,9 @@ export interface AdminUserItem {
 
 const select = {
   id: true,
+  login: true,
+  firstName: true,
+  lastName: true,
   name: true,
   avatarUrl: true,
   isAdmin: true,
