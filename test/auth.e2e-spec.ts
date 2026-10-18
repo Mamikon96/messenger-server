@@ -121,6 +121,23 @@ describe('Auth (e2e)', () => {
     await http().get('/api/auth/session').set('Cookie', me.cookie).expect(401);
   });
 
+  it('logout of a session older than a day: renewal cookie is followed by the clearing one', async () => {
+    const me = await loginAs(app);
+    await prisma.session.updateMany({
+      data: { expiresAt: new Date(Date.now() + 398 * 86_400_000) },
+    });
+    const res = await http()
+      .post('/api/auth/logout')
+      .set('Cookie', me.cookie)
+      .set('X-CSRF-Token', me.csrf)
+      .expect(204);
+    const sids = (
+      res.headers['set-cookie'] as unknown as string[] | undefined
+    )!.filter((c) => c.startsWith('sid='));
+    expect(sids.at(-1)).toMatch(/Expires=Thu, 01 Jan 1970/);
+    expect(await prisma.session.count()).toBe(0);
+  });
+
   describe('POST /auth/logout-all', () => {
     const logoutAll = (me: { cookie: string; csrf?: string }) => {
       const req = http().post('/api/auth/logout-all').set('Cookie', me.cookie);

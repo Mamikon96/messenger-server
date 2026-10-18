@@ -55,7 +55,7 @@ describe('Sessions (e2e)', () => {
   });
 
   describe('SessionsService', () => {
-    it('stores a hash of the token, not the token, with a ~7 day expiry', async () => {
+    it('stores a hash of the token, not the token, with a ~400 day expiry', async () => {
       const { token, expiresAt } = await sessions.create(userId);
       const hash = createHash('sha256').update(token).digest('hex');
       expect(
@@ -65,8 +65,8 @@ describe('Sessions (e2e)', () => {
         await prisma.session.findUnique({ where: { id: hash } }),
       ).not.toBeNull();
       const days = (expiresAt.getTime() - Date.now()) / 86_400_000;
-      expect(days).toBeGreaterThan(6.99);
-      expect(days).toBeLessThan(7.01);
+      expect(days).toBeGreaterThan(399.99);
+      expect(days).toBeLessThan(400.01);
     });
 
     it('find returns null for unknown and expired tokens', async () => {
@@ -121,6 +121,88 @@ describe('Sessions (e2e)', () => {
         .get('/api/probe')
         .set('Cookie', `sid=${token}`)
         .expect(401);
+    });
+
+    describe('sliding expiry (BE-36)', () => {
+      const DAY_MS = 86_400_000;
+      const TTL_MS = 400 * DAY_MS;
+      const setCookies = (res: request.Response) =>
+        (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+      const expiresOf = async (token: string) =>
+        (
+          await prisma.session.findUniqueOrThrow({
+            where: { id: createHash('sha256').update(token).digest('hex') },
+          })
+        ).expiresAt.getTime();
+      const ageBy = (ms: number) =>
+        prisma.session.updateMany({
+          data: { expiresAt: new Date(Date.now() + TTL_MS - ms) },
+        });
+
+      it('extends a session older than a day and reissues the sid cookie', async () => {
+        const { token } = await sessions.create(userId);
+        await ageBy(2 * DAY_MS);
+        const res = await request(app.getHttpServer())
+          .get('/api/probe')
+          .set('Cookie', `sid=${token}`)
+          .expect(200);
+        const sid = setCookies(res).filter((c) => c.startsWith('sid='));
+        expect(sid).toHaveLength(1);
+        expect(sid[0]).toContain(`sid=${token}`);
+        expect(sid[0]).toContain('HttpOnly');
+        expect(sid[0]).toContain('SameSite=Lax');
+        expect(sid[0]).toContain('Path=/');
+        const expires = new Date(/Expires=([^;]+)/.exec(sid[0])![1]).getTime();
+        expect(Math.abs(expires - (Date.now() + TTL_MS))).toBeLessThan(5_000);
+        expect(Math.abs((await expiresOf(token)) - (Date.now() + TTL_MS))).toBeLessThan(5_000);
+      });
+
+      it('does not write or set a cookie again within the same day', async () => {
+        const { token } = await sessions.create(userId);
+        await ageBy(2 * DAY_MS);
+        const get = () =>
+          request(app.getHttpServer())
+            .get('/api/probe')
+            .set('Cookie', `sid=${token}`)
+            .expect(200);
+        await get();
+        const after = await expiresOf(token);
+        const second = await get();
+        expect(setCookies(second)).toEqual([]);
+        expect(await expiresOf(token)).toBe(after);
+      });
+
+      it('leaves a fresh session alone', async () => {
+        const { token, expiresAt } = await sessions.create(userId);
+        const res = await request(app.getHttpServer())
+          .get('/api/probe')
+          .set('Cookie', `sid=${token}`)
+          .expect(200);
+        expect(setCookies(res)).toEqual([]);
+        expect(await expiresOf(token)).toBe(expiresAt.getTime());
+      });
+
+      it('sets the cookie in only one of several parallel requests', async () => {
+        const { token } = await sessions.create(userId);
+        await ageBy(2 * DAY_MS);
+        const responses = await Promise.all(
+          Array.from({ length: 6 }, () =>
+            request(app.getHttpServer())
+              .get('/api/probe')
+              .set('Cookie', `sid=${token}`),
+          ),
+        );
+        expect(responses.map((r) => r.status)).toEqual(Array(6).fill(200));
+        expect(responses.filter((r) => setCookies(r).length > 0)).toHaveLength(1);
+      });
+
+      it('authenticate (WebSocket path) does not extend the session', async () => {
+        const { token } = await sessions.create(userId);
+        await ageBy(2 * DAY_MS);
+        const before = await expiresOf(token);
+        expect(await sessions.authenticate(`sid=${token}`)).not.toBeNull();
+        expect(await expiresOf(token)).toBe(before);
+      });
     });
 
     it('lets GET pass without a CSRF header', async () => {

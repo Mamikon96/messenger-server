@@ -13,7 +13,7 @@
 | Таблица | Поля | Ограничения |
 |---|---|---|
 | `users` | `id` uuid, `login`, `password_hash`, `first_name`, `last_name`, `name`, `avatar_url`, `is_admin`, `disabled_at` (null — активен), `created_at` | email не хранится; `avatar_url` новых пользователей — пустая строка; `login` уникален, CHECK `users_login_format` (нижний регистр, `[a-z0-9._-]{3,32}`); `password_hash` — argon2id в PHC; `last_name` по умолчанию `''`; `name` — производное `btrim(first_name \|\| ' ' \|\| last_name)`, пишет код, CHECK `users_name_matches_parts` (BE-44, BE-D38) |
-| `sessions` | `id` (хэш токена cookie), `user_id`, `csrf_token`, `created_at`, `expires_at` | срок 7 дней, абсолютный; cookie хранит только непрозрачный токен |
+| `sessions` | `id` (хэш токена cookie), `user_id`, `csrf_token`, `created_at`, `expires_at` | срок 400 дней, скользящий (продление не чаще раза в сутки при REST-запросе); cookie хранит только непрозрачный токен |
 | `chats` | `id`, `type` (`direct`/`group`), `title` (null для 1:1), `direct_key` (null для групп), `created_by`, `last_seq`, `created_at` | уникально `direct_key` (отсортированная пара id); `last_seq` растёт атомарно; CHECK `chats_type_shape`: `direct` ⇔ `direct_key` задан и `title` null, `group` ⇔ `direct_key` null и `title` задан |
 | `chat_members` | (`chat_id`, `user_id`), `role` (`owner`/`member`), `last_read_seq`, `joined_at` | в группе всегда есть хотя бы один `owner` |
 | `messages` | `id`, `chat_id`, `seq`, `sender_id`, `client_id`, `body`, `created_at` | уникально (`chat_id`, `seq`) и (`chat_id`, `sender_id`, `client_id`) |
