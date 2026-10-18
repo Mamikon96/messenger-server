@@ -45,7 +45,7 @@ describe('Admin users (e2e)', () => {
   });
 
   it('lists disabled users too', async () => {
-    await loginAs(app, { name: 'Bob', disabled: true });
+    const bob = await loginAs(app, { name: 'Bob', disabled: true });
     const res = await http()
       .get('/api/admin/users')
       .set('Cookie', admin.cookie)
@@ -57,10 +57,18 @@ describe('Admin users (e2e)', () => {
     expect(Object.keys(res.body[0]).sort()).toEqual([
       'avatarUrl',
       'disabledAt',
+      'firstName',
       'id',
       'isAdmin',
+      'lastName',
+      'login',
       'name',
     ]);
+    expect(res.body[1]).toMatchObject({
+      login: bob.login,
+      firstName: 'Bob',
+      lastName: '',
+    });
     expect(res.body[0].disabledAt).toBeNull();
     expect(res.body[1].disabledAt).not.toBeNull();
   });
@@ -100,6 +108,11 @@ describe('Admin users (e2e)', () => {
     await http().get('/api/admin/users').set('Cookie', bob.cookie).expect(403);
     const res = await patch(admin, bob.userId, { isAdmin: true }).expect(200);
     expect(res.body.isAdmin).toBe(true);
+    expect(res.body).toMatchObject({
+      login: bob.login,
+      firstName: 'Bob',
+      lastName: '',
+    });
     await http().get('/api/admin/users').set('Cookie', bob.cookie).expect(200);
     const demoted = await patch(admin, bob.userId, { isAdmin: false }).expect(
       200,
