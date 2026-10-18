@@ -24,9 +24,9 @@ describe('parseEnv', () => {
     ]);
   });
 
-  it('defaults sessionTtlDays to 7 and sessionCookieName to sid', () => {
+  it('defaults sessionTtlDays to 400 and sessionCookieName to sid', () => {
     const config = parseEnv(valid);
-    expect(config.sessionTtlDays).toBe(7);
+    expect(config.sessionTtlDays).toBe(400);
     expect(config.sessionCookieName).toBe('sid');
   });
 

@@ -17,6 +17,8 @@ export interface AuthenticatedSession extends SessionInfo {
   token: string;
 }
 
+const DAY_MS = 86_400_000;
+
 const hashToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex');
 
@@ -35,7 +37,7 @@ export class SessionsService {
     const token = randomBytes(32).toString('base64url');
     const csrfToken = randomBytes(24).toString('base64url');
     const expiresAt = new Date(
-      Date.now() + this.config.get().sessionTtlDays * 86_400_000,
+      Date.now() + this.config.get().sessionTtlDays * DAY_MS,
     );
     await db.session.create({
       data: { id: hashToken(token), userId, csrfToken, expiresAt },
@@ -59,6 +61,25 @@ export class SessionsService {
       expiresAt: session.expiresAt,
       createdAt: session.createdAt,
     };
+  }
+
+  /**
+   * Sliding expiry (BE-36, BE-D32): when less than `TTL - 1 day` is left, moves `expires_at` to `now + TTL`.
+   * Returns the new expiry only for the call that wrote it (a concurrent request gets `null`), so the caller
+   * sets the cookie at most once per day. Called on REST requests only: WebSocket handshakes do not renew (BE-D35).
+   */
+  async renew(
+    session: Pick<SessionInfo, 'sessionId' | 'expiresAt'>,
+  ): Promise<Date | null> {
+    const ttlMs = this.config.get().sessionTtlDays * DAY_MS;
+    const threshold = new Date(Date.now() + ttlMs - DAY_MS);
+    if (session.expiresAt.getTime() >= threshold.getTime()) return null;
+    const expiresAt = new Date(Date.now() + ttlMs);
+    const { count } = await this.prisma.session.updateMany({
+      where: { id: session.sessionId, expiresAt: { lt: threshold } },
+      data: { expiresAt },
+    });
+    return count === 1 ? expiresAt : null;
   }
 
   /** Сессия по заголовку Cookie: общий вход для SessionGuard и WebSocket. */

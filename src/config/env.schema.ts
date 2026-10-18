@@ -44,7 +44,7 @@ const envSchema = z.object({
       return origins;
     }),
   SESSION_COOKIE_NAME: z.string().min(1).default('sid'),
-  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(400),
   MAX_GROUP_MEMBERS: z.coerce.number().int().min(2).default(100),
   MAX_MESSAGE_LENGTH: z.coerce.number().int().positive().default(4000),
   MESSAGE_RATE_PER_MINUTE: z.coerce.number().int().positive().default(30),
