@@ -1,22 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ 3ad5641
+> Проверено: 2026-10-18 @ e2a502d+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-56 (P2)** Решения по тематическим файлам, `decisions.md` — генерируемый индекс (SH-D23)
-  - Цель: найти решение по ID или теме и прочитать только его тему (≤ ~25 КБ), а не весь `decisions.md` (111 КБ).
-  - Критерии приёмки:
-    1. Решения лежат в `.ai/memory/decisions/<тема>.md` (9 тем: process, harness, stack, access-auth, auth-password, sessions-limits, chats-messages, realtime, superseded); тексты переносятся дословно, ID не меняются, ни одно из 62 решений не потеряно.
-    2. `decisions.md` — только индекс: ID | суть ≤ 100 символов | статус (действует / частично заменено X / заменено X) | файл; заменённые — в отдельной секции «Заменено».
-    3. Индекс генерирует скрипт индекса решений (scripts/decisions-index.mjs, создаётся в этой задаче); `check-memory.sh` падает, если индекс не совпадает с файлами; `protect.mjs` запрещает ручную правку индекса.
-    4. `check-sync.mjs` (ссылки BE-Dxx/SH-Dxx) и `check-memory.sh` (уникальность ID, формат) читают все файлы `decisions/`; тесты: дубль ID, ссылка на несуществующий ID, рассинхрон индекса.
-    5. Обновлены `.ai/memory/README.md`, `CLAUDE.md` (маршрутизатор и правило 3), `tech-approval.md`, `memory-protocol.md`, `ask-user.md`, агенты (`solution-architect`: запись в тему и запуск скрипта).
-  - Вне рамок: менять смысл решений; CLAUDE.md «по строке на правило» (BE-57); переписывать ссылки на решения в коде и доках.
-  - Затрагивает: `.ai/memory/`, `scripts/`, `.claude/agents/`, `.ai/rules/`; контракт API: нет; схема БД: нет.
-  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: СДЕЛАНО: скрипт и тесты индекса, перенос 62 решений в 9 тем, индекс сгенерирован, check-sync/check-memory читают decisions/, protect.mjs блокирует ручную правку индекса (+тест), доки/правила/агенты обновлены. ОСТАЛОСЬ: разрешение `Bash(node scripts/decisions-index.mjs:*)` в `.claude/settings.json` (правит пользователь), коммиты по шагам через git-task.sh commit, bash scripts/accept.sh, nestjs-reviewer, push и PR.
+Нет задачи в работе.
 
 ## Бэклог
 - **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
