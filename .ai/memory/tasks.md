@@ -1,22 +1,11 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ cf4b8e4+dirty
+> Проверено: 2026-10-18 @ 167e402+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- **BE-63 (P2, харнес)** Экономия токенов по аудиту сессий
-  - Цель: снизить расход контекста в сессиях: большие файлы не читаются целиком, агент-аналитик компактнее, порог контекста описан в одном месте, guard предупреждает заранее.
-  - Критерии приёмки:
-    1. `.ai/rules/workflow.md` (раздел «Контекст») содержит правило: файл больше ~150 строк читается через `Read` с `limit`/`offset` или `grep -n`, а не `cat`/`sed`; в маршрутизатор `CLAUDE.md` добавлена ссылка.
-    2. `.claude/agents/system-analyst.md` ≤ 6 000 байт; назначение и ограничения (только чтение, вопросы вызывающему) сохранены.
-    3. Числа порога контекста (150 000 / 90 000) заданы в `.ai/rules/workflow.md` §5; в `README.md` памяти и остальных правилах — ссылка, не повтор. Расхождение кода guard с этими числами ловит `scripts/check-sync.mjs`.
-    4. `session-guard.mjs` на `UserPromptSubmit` при контексте последнего ответа ≥ 70% порога модели один раз за сессию добавляет в контекст предупреждение («заверши задачу или сделай /clear»); повторно в той же сессии не выводит; ниже 70% и после `/compact` молчит; не блокирует промпт. Покрыто тестами в `scripts/hooks/hooks.spec.mjs`.
-    5. Решение о предупреждении (70%) записано в `.ai/memory/decisions/harness.md`, индекс пересобран `node scripts/decisions-index.mjs`.
-  - Вне рамок: CLAUDE.md по строке на правило, `context-budget.md`, матрица закрытия (BE-57); рост «System tools» (BE-60); замер субагентов; изменение самих порогов 150 000 / 90 000.
-  - Затрагивает: `.ai/rules/workflow.md`, `.ai/memory/README.md`, `CLAUDE.md`, `.claude/agents/system-analyst.md`, `scripts/hooks/session-guard.mjs` (+ spec), `scripts/check-sync.mjs` (+ spec), `.ai/memory/decisions/harness.md`; контракт API: нет; схема БД: нет.
-  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: реализация (критерии 1–5) готова, `nestjs-reviewer` = APPROVE (BLOCKER/MAJOR нет; MINOR про двойное чтение транскрипта исправлен в session-guard.mjs). Изменения на ветке `feature/BE-63-context-savings` не закоммичены. Дальше: `bash scripts/accept.sh`, закоммитить по логическим шагам через `bash scripts/git-task.sh commit`, push и PR в develop (`.ai/rules/git-flow.md`), закрыть задачу в архив.
+- (пусто)
 
 ## Бэклог
 - **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
