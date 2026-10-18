@@ -1,48 +1,34 @@
 # messenger-server
 
-Бэкенд мессенджера для малой закрытой группы (до ~1 000 пользователей). Клиент — отдельный репозиторий `messenger-client-react` (`/home/mako/Projects/react/messenger-client-react`).
-
-## Стек
-Node.js + NestJS 12 (BE-D01), TypeScript/ESM, npm (BE-D03), тесты Vitest + supertest, линтер oxlint (BE-D04), WebSocket, PostgreSQL (SH-D07). Остальные библиотеки (ORM/драйвер БД, WebSocket-слой и др.) пока не выбраны — по `.ai/rules/tech-approval.md`.
+Бэкенд мессенджера для малой группы (до ~1 000 пользователей). Клиент — `/home/mako/Projects/react/messenger-client-react`.
+Стек: NestJS 12, TypeScript/ESM, npm, Vitest + supertest, oxlint, WebSocket, PostgreSQL. Прочие библиотеки — по `tech-approval.md`.
 
 ## Команды
-- `bash scripts/check-fast.sh` — быстрая проверка внутреннего цикла: lint + типы + unit по изменённым файлам
-- `bash scripts/check-memory.sh` — проверка памяти и жёсткая сверка кода с контрактом/решениями (`scripts/check-sync.mjs`)
-- `npm run start:dev` — запуск с перезагрузкой; `npm run build` — сборка
-- `npm run lint` — oxlint; `npm test` — unit (Vitest, `src/**/*.spec.ts`); `npm run test:e2e` — e2e (`test/*.e2e-spec.ts`)
-- `bash scripts/accept.sh` — приёмка: проверка памяти + lint + build + unit + e2e
-- `bash scripts/git-task.sh start|commit` — ветка задачи и коммит по git-flow
+`check-fast.sh` (lint+типы+unit), `check-memory.sh` (память+`check-sync.mjs`), `accept.sh` (приёмка), `git-task.sh start|commit` — всё `bash scripts/…`; `npm run start:dev|build|lint|test|test:e2e`.
 
-## Структура
-`src/` (NestJS-код), `test/` (e2e), `.ai/` (правила и память), `.claude/` (проектные агенты, права, hooks), `scripts/` (`scripts/hooks/` — hooks). Карта модулей — в `.ai/memory/architecture.md`.
-
-## Контекст для AI: читай только нужное
-Правила и память разложены по файлам в `.ai/`. **Не читай всё подряд** — открывай файлы по этому маршрутизатору (единственному; сводку «В работе» и последней приёмки даёт SessionStart-hook):
-
+## Маршрутизатор (читай только нужное; в `.ai/rules/`, память — `.ai/memory/`)
 | Задача | Файлы |
 |---|---|
-| Старт любой задачи разработки | `.ai/rules/workflow.md`, `.ai/rules/memory-protocol.md`, `.ai/memory/tasks.md` |
-| Модули, контроллеры, сервисы, DTO, миграции | `.ai/rules/code-style.md` (+ `.ai/memory/architecture.md`, если меняется структура или схема БД) |
-| Тесты / новое поведение | `.ai/rules/testing.md` |
-| Баги, текущее состояние | `.ai/memory/state.md` |
-| Исследование и планирование задачи, дизайн API/схемы | `.ai/rules/research-planning.md` |
-| Новая библиотека/подход | `.ai/rules/tech-approval.md`, затем индекс `.ai/memory/decisions.md` (ID → тема) и только нужная тема из `.ai/memory/decisions/` (`grep -n -A12 '^## BE-D31' .ai/memory/decisions/*.md`) |
-| Контракт API/событий, реалтайм, хранение | `.ai/memory/product-agreements.md` |
-| Самопроверка и ревью | `.ai/rules/review-checklist.md` |
-| Закрытие задачи | `.ai/rules/acceptance.md` |
-| Любая git-операция | `.ai/rules/git-flow.md` |
-| Закрытые задачи (история) | `.ai/memory/tasks-archive.md` — индекс (строка на задачу), `grep` по нему, затем нужный `.ai/memory/archive/<слаг>.md` |
-| Финальный отчёт | `.ai/rules/report-format.md` |
-| Сомнение / не хватает данных (любая задача) | `.ai/rules/ask-user.md` |
-| Чтение больших файлов, экономия контекста | `.ai/rules/workflow.md` §5 (`Read` с `limit`/`grep -n`, не `cat`) |
-| Правка структуры памяти и харнеса | `.ai/memory/README.md`, `scripts/check-memory.sh`, `scripts/check-sync.mjs` |
+| Старт задачи | `workflow.md`, `memory-protocol.md`, `tasks.md` |
+| Код, DTO, миграции | `code-style.md` (+`architecture.md` при смене структуры/схемы) |
+| Тесты | `testing.md` |
+| Баги, состояние | `state.md` |
+| Исследование, дизайн API/схемы | `research-planning.md` |
+| Новая библиотека | `tech-approval.md`, `decisions.md` |
+| Контракт, реалтайм | `product-agreements.md` |
+| Ревью / закрытие | `review-checklist.md` / `acceptance.md` |
+| Git | `git-flow.md` |
+| История задач | `tasks-archive.md` (grep) |
+| Отчёт / вопрос пользователю | `report-format.md` / `ask-user.md` |
+| Что не читать | `context-budget.md` |
+| Структура памяти, харнес | `memory/README.md`, `check-memory.sh` |
 
-## Неснимаемые правила (детали — в файлах выше)
-1. **Память:** после ЛЮБЫХ изменений, до ответа пользователю, актуализируй `tasks.md` (+ `state.md`) и запусти `bash scripts/check-memory.sh` — штамп «Проверено» она пишет сама (Stop-hook не даст закончить ответ, пока проверка красная). Сессия выше порога контекста или после закрытия задачи останавливается hook'ом с требованием `/clear` (`.ai/rules/workflow.md` §5). Протокол — `.ai/rules/memory-protocol.md`.
-2. **Исследование и планирование:** к анализу подключается `system-analyst` (запускает основная сессия; дубли, контракт, БД, масштабирование). См. `.ai/rules/research-planning.md`.
-3. **Новые технологии/подходы** — только после опроса пользователя (`AskUserQuestion`); сразу после его выбора решение (что, почему, альтернативы) записывается в конец файла темы `.ai/memory/decisions/<тема>.md`, затем `node scripts/decisions-index.mjs` пересобирает индекс `decisions.md` (вручную индекс не правится) — для вариантов от `solution-architect` это делает он; агенты читают индекс и нужную тему, а не изобретают заново. См. `.ai/rules/tech-approval.md`.
-4. **Приёмка:** закрытие задачи (файл в `.ai/memory/archive/` и строка в индексе `.ai/memory/tasks-archive.md`) только при `bash scripts/accept.sh` = 0 **и** APPROVE от `nestjs-reviewer`; ревью запускает основная сессия. См. `.ai/rules/acceptance.md`.
-5. Для нового поведения — тест в рамках той же задачи, тесты пишутся до реализации. См. `.ai/rules/testing.md`.
-6. **Контракт и WIP = 1:** задача начинается с контракта (Цель, Критерии приёмки, Вне рамок, Затрагивает, Проверка, Осталось), подтверждённого пользователем; в работе одна задача; одна проверка упала 3 раза подряд — стоп и отчёт. См. `.ai/rules/workflow.md`.
-7. **Не придумывать — спрашивать:** любой агент при сомнении или нехватке данных спрашивает пользователя (`AskUserQuestion`); догадки и собственные допущения запрещены. Агент без возможности спросить возвращает вопросы вызывающему, а тот переадресует их пользователю. См. `.ai/rules/ask-user.md`.
-8. **Git:** git-flow, ветка задачи от `develop`, коммиты по логическим шагам, после приёмки и APPROVE — push и PR; слияние, теги, удаление веток — только по просьбе пользователя. См. `.ai/rules/git-flow.md`.
+## Неснимаемые правила (детали по ссылкам)
+1. Память: после правок до ответа — `tasks.md`/`state.md` и `check-memory.sh` (`memory-protocol.md`, `workflow.md` §5).
+2. Анализ и планирование — через `system-analyst` (`research-planning.md`).
+3. Новые технологии — только после `AskUserQuestion`, решение в `decisions/` (`tech-approval.md`).
+4. Закрытие — `accept.sh` = 0 и APPROVE `nestjs-reviewer`, где нужно (`acceptance.md`).
+5. Тесты до реализации (`testing.md`).
+6. Контракт, подтверждённый пользователем; WIP = 1; три падения подряд — стоп (`workflow.md`).
+7. Сомнение — спрашивай, не додумывай (`ask-user.md`).
+8. Git-flow: ветка от `develop`, push и PR после приёмки; слияние и теги — по просьбе (`git-flow.md`).

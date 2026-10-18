@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 Ты реализуешь ровно одну задачу из «В работе» `.ai/memory/tasks.md`. Вход — её контракт: Цель, Критерии приёмки, Вне рамок, Затрагивает, Проверка (`.ai/rules/workflow.md`).
 
 ## Порядок
-1. Прочитай контракт задачи, `.ai/rules/code-style.md`, `.ai/rules/testing.md`, `.ai/rules/review-checklist.md`. Остальное — только по маршрутизатору `CLAUDE.md`. Решения целиком не читай: найди ID или тему в индексе `.ai/memory/decisions.md`, затем `grep -n -A12 '^## BE-D31' .ai/memory/decisions/*.md`. Общие знания по NestJS/SQL — скиллы `nestjs-development`, `sql-development` по необходимости (стек проекта важнее: Vitest, а не Jest; Prisma).
+1. Прочитай контракт задачи, `.ai/rules/code-style.md`, `.ai/rules/testing.md`, `.ai/rules/review-checklist.md`. Остальное — только по маршрутизатору `CLAUDE.md`; что не читать — `.ai/rules/context-budget.md`. Общие знания по NestJS/SQL — скиллы `nestjs-development`, `sql-development` по необходимости (стек проекта важнее: Vitest, а не Jest; Prisma).
 2. На каждый критерий приёмки — тест, который падает до реализации; покажи вывод падения.
 3. Реализация минимальная, только под критерии. Замеченное вне рамок — строкой в «Бэклог» `tasks.md`, не в код.
 4. Внутренний цикл — `bash scripts/check-fast.sh`. Одна и та же проверка упала 3 раза подряд — остановись и верни вызывающему: что пробовал, вывод, гипотезу.

@@ -1,14 +1,24 @@
 # Задачи backend
-> Проверено: 2026-10-18 @ 167e402+dirty
+> Проверено: 2026-10-18 @ 1a8f827+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — только после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer` (см. `decisions.md` SH-D02, `CLAUDE.md`).
 
 ## В работе
-- (пусто)
+- **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
+  - Цель: меньше токенов в полу сессии за счёт сжатия `CLAUDE.md` без потери правил (SH-D21, P4, P5).
+  - Критерии приёмки:
+    1. `wc -c CLAUDE.md` ≤ 4000; каждое из 8 неснимаемых правил — одна строка со ссылкой на `.ai/rules/*`, ни одно не потеряно.
+    2. Корневой README каталога .ai удалён, ссылки на него в `.ai/memory/README.md` обновлены (исторические в архиве остаются).
+    3. Новый context-budget.md («чего не читать»); проектные агенты ссылаются на него одной строкой вместо своих копий.
+    4. В `acceptance.md` матрица «тип изменения → check-memory / accept.sh / nestjs-reviewer / system-analyst».
+    5. `check-sync.mjs` проверяет лимит 4000 байт у `CLAUDE.md` и существование `context-budget.md` (тест в `check-sync.spec.mjs`).
+  - Вне рамок: автоопределение типа изменения в `accept.sh`; BE-60, BE-61; правки `src/`.
+  - Затрагивает: `CLAUDE.md`, `.ai/rules/`, `.ai/memory/README.md`, `.claude/agents/`, `scripts/check-sync.mjs` (+ spec); контракт API: нет; схема БД: нет.
+  - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`; ревью `nestjs-reviewer` нужно (затронуты `scripts/` и `.claude/`).
+  - Осталось: приёмка (accept.sh), ревью nestjs-reviewer, push и PR.
 
 ## Бэклог
-- **BE-57 (P2)** Харнес, шаг 4: CLAUDE.md по строке на правило, context-budget.md, матрица закрытия
 - **BE-51 (P1)** Группа без участников: memberIds — min(0), default [], max (FE-D45)
 - **BE-52 (P2)** Удаление группы владельцем: DELETE /api/chats/:id, событие chat.removed (FE-D45)
 - **BE-53 (P2)** GET /api/users без q → 400 (после перехода клиента на поиск)
