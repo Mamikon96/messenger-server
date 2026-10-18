@@ -248,6 +248,40 @@ export class ChatsService {
   }
 
   /**
+   * Удаление группы owner'ом. Участники и сообщения удаляются каскадом (FK);
+   * `chat.removed` получают все участники на момент удаления, включая owner.
+   */
+  async remove(userId: string, chatId: string): Promise<void> {
+    const recipients = await this.prisma.$transaction(async (tx) => {
+      const { chat, role } = await this.access.requireMember(
+        tx,
+        chatId,
+        userId,
+        { lock: true },
+      );
+      if (chat.type === 'direct') {
+        throw new AppError(
+          400,
+          'validation_failed',
+          'a direct chat cannot be deleted',
+        );
+      }
+      if (role !== 'owner') throw new AppError(403, 'forbidden');
+      const members = await tx.chatMember.findMany({
+        where: { chatId },
+        select: { userId: true },
+      });
+      await tx.chat.delete({ where: { id: chatId } });
+      return members.map((m) => m.userId);
+    });
+    this.events.publish({
+      type: 'chat.removed',
+      recipients,
+      payload: { chatId },
+    });
+  }
+
+  /**
    * Выход участника (`targetId` = я) или удаление участника owner'ом.
    * Единственный owner выйти не может — `403 forbidden`.
    */

@@ -1099,4 +1099,166 @@ describe('Chats (e2e)', () => {
       );
     });
   });
+
+  describe('DELETE /chats/:id', () => {
+    const deleteChat = (as: TestLogin, chatId: string) =>
+      request(app.getHttpServer())
+        .delete(`/api/chats/${chatId}`)
+        .set('Cookie', as.cookie)
+        .set('X-CSRF-Token', as.csrf);
+
+    const sendMessage = (as: TestLogin, chatId: string) =>
+      request(app.getHttpServer())
+        .post(`/api/chats/${chatId}/messages`)
+        .set('Cookie', as.cookie)
+        .set('X-CSRF-Token', as.csrf)
+        .send({ clientId: randomUUID(), body: 'hi' });
+
+    const countRows = async (chatId: string) => ({
+      chats: await prisma.chat.count({ where: { id: chatId } }),
+      members: await prisma.chatMember.count({ where: { chatId } }),
+      messages: await prisma.message.count({ where: { chatId } }),
+    });
+
+    it('lets the owner delete the group: cascade, chat.removed to all members including the owner', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const b = await loginAs(app);
+      const chat = await createGroup(owner, [a, b]);
+      await sendMessage(a, chat.id).expect(201);
+      recorder.events.length = 0;
+
+      await deleteChat(owner, chat.id).expect(204);
+
+      expect(await countRows(chat.id)).toEqual({
+        chats: 0,
+        members: 0,
+        messages: 0,
+      });
+      for (const u of [owner, a, b]) {
+        await getChat(u, chat.id).expect(404);
+        const list = (
+          await request(app.getHttpServer())
+            .get('/api/chats')
+            .set('Cookie', u.cookie)
+            .expect(200)
+        ).body;
+        expect(list.map((c: { id: string }) => c.id)).not.toContain(chat.id);
+      }
+      expect(recorder.events).toHaveLength(1);
+      const [event] = recorder.events;
+      expect(event.type).toBe('chat.removed');
+      expect(event.payload).toEqual({ chatId: chat.id });
+      expect([...event.recipients].sort()).toEqual(
+        [owner.userId, a.userId, b.userId].sort(),
+      );
+    });
+
+    it('deletes an empty group (BE-51) with chat.removed to the owner only', async () => {
+      const owner = await loginAs(app);
+      const chat = (
+        await createChat(owner, { type: 'group', title: 'Solo' }).expect(201)
+      ).body;
+      recorder.events.length = 0;
+
+      await deleteChat(owner, chat.id).expect(204);
+      expect(await countRows(chat.id)).toEqual({
+        chats: 0,
+        members: 0,
+        messages: 0,
+      });
+      expect(recorder.events).toEqual([
+        {
+          type: 'chat.removed',
+          recipients: [owner.userId],
+          payload: { chatId: chat.id },
+        },
+      ]);
+    });
+
+    it('forbids a non-owner member (403); chat is intact, no events', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const chat = await createGroup(owner, [a]);
+      recorder.events.length = 0;
+
+      const res = await deleteChat(a, chat.id).expect(403);
+      expect(res.body.error.code).toBe('forbidden');
+      expect(await countRows(chat.id)).toMatchObject({ chats: 1, members: 2 });
+      expect(recorder.events).toHaveLength(0);
+    });
+
+    it('returns 404 for a non-member and an unknown chat, 400 for a direct chat and a bad uuid', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const stranger = await loginAs(app);
+      const chat = await createGroup(owner, [a]);
+      const direct = (
+        await createChat(owner, { type: 'direct', userId: a.userId }).expect(
+          201,
+        )
+      ).body;
+      recorder.events.length = 0;
+
+      const nonMember = await deleteChat(stranger, chat.id).expect(404);
+      expect(nonMember.body.error.code).toBe('not_found');
+      await deleteChat(owner, randomUUID()).expect(404);
+      const dir = await deleteChat(owner, direct.id).expect(400);
+      expect(dir.body.error.code).toBe('validation_failed');
+      const bad = await deleteChat(owner, 'not-a-uuid').expect(400);
+      expect(bad.body.error.code).toBe('validation_failed');
+
+      expect(await countRows(chat.id)).toMatchObject({ chats: 1, members: 2 });
+      expect(await countRows(direct.id)).toMatchObject({
+        chats: 1,
+        members: 2,
+      });
+      expect(recorder.events).toHaveLength(0);
+    });
+
+    it('returns 404 on a repeated delete', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const chat = await createGroup(owner, [a]);
+      await deleteChat(owner, chat.id).expect(204);
+      const again = await deleteChat(owner, chat.id).expect(404);
+      expect(again.body.error.code).toBe('not_found');
+    });
+
+    it('never answers 5xx when a message is sent concurrently; no orphan messages', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const chat = await createGroup(owner, [a]);
+
+      const [sent, deleted] = await Promise.all([
+        sendMessage(a, chat.id),
+        deleteChat(owner, chat.id),
+      ]);
+      expect(deleted.status).toBe(204);
+      expect([201, 404]).toContain(sent.status);
+      expect(
+        recorder.events.filter((e) => e.type === 'chat.removed'),
+      ).toHaveLength(1);
+      expect(await countRows(chat.id)).toEqual({
+        chats: 0,
+        members: 0,
+        messages: 0,
+      });
+    });
+
+    it('requires a session and csrf', async () => {
+      const owner = await loginAs(app);
+      const a = await loginAs(app);
+      const chat = await createGroup(owner, [a]);
+      await request(app.getHttpServer())
+        .delete(`/api/chats/${chat.id}`)
+        .expect(401);
+      const noCsrf = await request(app.getHttpServer())
+        .delete(`/api/chats/${chat.id}`)
+        .set('Cookie', owner.cookie)
+        .expect(403);
+      expect(noCsrf.body.error.code).toBe('csrf_invalid');
+      expect(await countRows(chat.id)).toMatchObject({ chats: 1, members: 2 });
+    });
+  });
 });

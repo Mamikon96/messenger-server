@@ -231,6 +231,31 @@ describe('WebSocket handshake and frames (e2e)', () => {
       bobTab.close();
     });
 
+    it('sends chat.removed to every member of a deleted group, including the owner, and no later message.new', async () => {
+      const bob = await loginAs(app, { name: 'Bob' });
+      const chatA = await createGroup(alice, [bob]);
+      const chatB = await createGroup(alice, [bob]);
+      const aliceTab = await open(alice);
+      const bobTab = await open(bob);
+
+      await http()
+        .delete(`/api/chats/${chatA.id}`)
+        .set('Cookie', alice.cookie)
+        .set('X-CSRF-Token', alice.csrf)
+        .expect(204);
+      const expected = { type: 'chat.removed', payload: { chatId: chatA.id } };
+      expect(await aliceTab.next()).toEqual(expected);
+      expect(await bobTab.next()).toEqual(expected);
+
+      await sendMessage(alice, chatA.id).expect(404);
+      await sendMessage(alice, chatB.id, 'marker').expect(201);
+      const next = await bobTab.next();
+      expect(next.type).toBe('message.new');
+      expect(next.payload).toMatchObject({ chatId: chatB.id, body: 'marker' });
+      aliceTab.close();
+      bobTab.close();
+    });
+
     it('sends chat.created to the added member and chat.updated to the previous members', async () => {
       const bob = await loginAs(app, { name: 'Bob' });
       const carol = await loginAs(app, { name: 'Carol' });
