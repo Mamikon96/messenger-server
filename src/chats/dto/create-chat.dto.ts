@@ -10,7 +10,8 @@ const groupSchema = z.object({
   title: z.string().trim().min(1).max(100),
   memberIds: z
     .array(z.uuid())
-    .min(1)
+    .max(1000)
+    .default([])
     .refine(
       (ids) => new Set(ids).size === ids.length,
       'memberIds must be unique',
