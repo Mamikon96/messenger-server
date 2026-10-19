@@ -5,6 +5,7 @@ export interface ChatMemberDto {
   name: string;
   avatarUrl: string;
   role: 'owner' | 'member';
+  lastReadSeq: number;
 }
 
 export interface ChatDto {
@@ -25,6 +26,7 @@ export interface ChatRow {
 export interface ChatMemberRow {
   userId: string;
   role: ChatRole;
+  lastReadSeq: number;
   joinedAt: Date;
   user: { name: string; avatarUrl: string };
 }
@@ -35,6 +37,7 @@ export const chatMembersInclude = {
     select: {
       userId: true,
       role: true,
+      lastReadSeq: true,
       joinedAt: true,
       user: { select: { name: true, avatarUrl: true } },
     },
@@ -58,6 +61,7 @@ export function toChatDto(chat: ChatRow, members: ChatMemberRow[]): ChatDto {
       name: m.user.name,
       avatarUrl: m.user.avatarUrl,
       role: m.role,
+      lastReadSeq: m.lastReadSeq,
     })),
   };
 }
@@ -96,6 +100,7 @@ export interface ChatPeerDto {
   id: string;
   name: string;
   avatarUrl: string;
+  lastReadSeq: number;
 }
 
 export interface ChatListItemDto {

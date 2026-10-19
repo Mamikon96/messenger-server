@@ -136,12 +136,12 @@
   { "id": "0b6c…", "type": "direct", "title": null, "lastSeq": 12,
     "lastMessage": { "chatId": "0b6c…", "seq": 12, "senderId": "6f1c…", "clientId": "3d9e…", "body": "hi", "createdAt": "2026-10-08T10:15:30.123Z" },
     "unreadCount": 0,
-    "peer": { "id": "a2b3…", "name": "Bob", "avatarUrl": "" } },
+    "peer": { "id": "a2b3…", "name": "Bob", "avatarUrl": "", "lastReadSeq": 12 } },
   { "id": "9e1f…", "type": "group", "title": "Team", "lastSeq": 0, "lastMessage": null, "unreadCount": 0 }
 ]
 ```
 - `unreadCount = lastSeq − last_read_seq`. Отправка своего сообщения сдвигает `last_read_seq` отправителя на его `seq`, т. е. **отправка помечает прочитанным всё, что было раньше**.
-- `peer` есть только у `direct` (в чате с собой — сам пользователь); у `group` поля нет вовсе.
+- `peer` есть только у `direct` (в чате с собой — сам пользователь); у `group` поля нет вовсе. `peer.lastReadSeq` — до какого `seq` прочитал чат собеседник; в группах `lastReadSeq` участников — в `members` (`GET /api/chats/:id`).
 - Состав участников — только в `GET /api/chats/:id`.
 
 ### 3.3. `POST /api/chats` (CSRF)
@@ -209,7 +209,7 @@ Query (необязательны; только десятичные целые 
 ### 3.10. `POST /api/chats/:id/read` (CSRF)
 Тело `{ "seq": <целое JSON-число 0..2147483647> }` (строка — `400`).
 `204`: `last_read_seq = max(текущий, seq)`. `400` — `seq` больше `lastSeq` чата; `404` — нет членства.
-**Событий нет**: другие вкладки, устройства и участники о прочтении не узнают.
+При фактическом сдвиге все текущие участники, включая читающего (его другие вкладки), получают `chat.read {chatId, userId, lastReadSeq}`; при `seq` ≤ текущего — `204` без события. Вызывать не чаще раза в 1–2 с (debounce) и только из видимой вкладки; серверного throttle нет.
 
 ### 3.11. Админка: пользователи (справочно)
 Клиент не знает, админ ли пользователь (SH-D12), поэтому админ-UI показывается по ответу: `403 forbidden` — не админ. Нужны сессия, CSRF и права админа.
@@ -238,9 +238,9 @@ Query (необязательны; только десятичные целые 
 |---|---|
 | `UserSummary` | `id`, `name: string`, `avatarUrl: string` (может быть `""`) |
 | `SessionUser` | `id`, `login`, `firstName`, `lastName`, `name`, `avatarUrl` (без `provider` и `isAdmin`); `login` видит только сам пользователь |
-| `ChatMemberDto` | `userId`, `name`, `avatarUrl`, `role: "owner" \| "member"`; порядок — по времени вступления, затем `userId` |
+| `ChatMemberDto` | `userId`, `name`, `avatarUrl`, `role: "owner" \| "member"`, `lastReadSeq`; порядок — по времени вступления, затем `userId` |
 | `ChatDto` | `id`, `type: "direct" \| "group"`, `title: string \| null` (direct — всегда `null`, group — всегда строка), `lastSeq`, `members: ChatMemberDto[]` (в чате с собой один элемент) |
-| `ChatListItemDto` | `id`, `type`, `title`, `lastSeq`, `lastMessage: ChatMessageDto \| null`, `unreadCount`, `peer?: {id, name, avatarUrl}` (только direct) |
+| `ChatListItemDto` | `id`, `type`, `title`, `lastSeq`, `lastMessage: ChatMessageDto \| null`, `unreadCount`, `peer?: {id, name, avatarUrl, lastReadSeq}` (только direct) |
 | `ChatMessageDto` (REST и `message.new`) | `chatId`, `seq`, `senderId`, `clientId`, `body`, `createdAt` |
 | `AdminUserItem` | `id`, `login`, `firstName`, `lastName`, `name`, `avatarUrl`, `isAdmin: boolean`, `disabledAt: string \| null` |
 
@@ -268,6 +268,7 @@ Query (необязательны; только десятичные целые 
 | `message.new` | `ChatMessageDto` | все участники на момент отправки, включая все сокеты отправителя |
 | `chat.created` | `ChatDto` | новый чат — все участники кроме инициатора; добавление в группу — только новый участник |
 | `chat.updated` | `{chatId, title}` или `{chatId, members: ChatMemberDto[]}` (полный состав) | все текущие участники, включая инициатора |
+| `chat.read` | `{chatId, userId, lastReadSeq}` | все текущие участники на момент сдвига, включая все сокеты читающего; только при фактическом сдвиге |
 | `chat.removed` | `{chatId}` | удалённый/вышедший участник; при удалении группы — все участники, включая инициатора |
 | `error` | `{code, message}` | ответ на кадр клиента |
 
@@ -331,6 +332,7 @@ Query (необязательны; только десятичные целые 
 1. После `GET /api/auth/session` = `200` открыть `new WebSocket(`${proto}://${location.host}/ws`)`.
 2. `message.new`: обновить сообщения, `lastMessage`, порядок списка; `unreadCount++`, если отправитель не я и чат не открыт.
 3. `chat.created` — добавить чат; `chat.updated` — обновить `title`/`members`; `chat.removed` — убрать чат.
+4. `chat.read`: `lastReadSeq` участника `userId` = `max(текущий, payload.lastReadSeq)`; если `userId` — я, `unreadCount = lastSeq − lastReadSeq` (синхронизация вкладок). Свой `message.new` обнуляет `unreadCount` (`lastReadSeq` отправителя ≥ `seq`). `POST /api/chats/:id/read` вызывать с debounce 1–2 с и только из видимой вкладки.
 
 **Переподключение и догонка.**
 1. По `close` действовать по таблице 5.3, переподключаться с backoff.
@@ -368,13 +370,13 @@ Query (необязательны; только десятичные целые 
 3. Backoff и jitter реконнекта, реакция на `4008`, поведение при `visibilitychange` и `online/offline`. Прикладной ping слать нельзя — полуоткрытое соединение быстро не определить.
 4. Когда и с каким `seq` вызывать `POST …/read` (показ, фокус), debounce.
 5. Кэш истории и `lastKnownSeq` по чатам (память или IndexedDB); объём догонки при реконнекте (все чаты или только открытые/кэшированные).
-6. Синхронизация непрочитанных между вкладками (событий о чтении нет): `BroadcastChannel` или перечитывание `GET /api/chats` при фокусе.
+6. Синхронизация непрочитанных между вкладками решена событием `chat.read` (BE-20); перечитывание `GET /api/chats` при реконнекте остаётся для догонки пропущенного.
 7. Как вкладка инициатора узнаёт о чате, созданном в другой её вкладке (`chat.created` инициатору не приходит): перечитывание списка при фокусе или `message.new` для неизвестного чата.
 8. Тексты для `error.code` (в том числе `auth_failed`, `user_disabled`); санитизация и линкификация `body`.
 9. Dev-окружение: прокси `/ws` (`ws: true`) и `/api` на реальный бэкенд вместо mock-BFF. `PUBLIC_URL` и `ALLOWED_ORIGINS` должны совпадать с origin, который открыт в браузере.
 ### 8б. Решает/доделывает бэкенд (вопросы к владельцу продукта)
-1. **Статус «прочитано» собеседником показать нельзя**: чужой `last_read_seq` нигде не отдаётся, событий о чтении нет. Решение о `lastReadSeq` в `ChatMemberDto` и событии о чтении ещё не принято (задача BE-20).
-2. Нет события о собственном чтении для других вкладок/устройств — `unreadCount` расходится до перечитывания списка (BE-20).
+1. Решено (BE-D41, BE-20): статус «прочитано» — `lastReadSeq` в `ChatMemberDto`, `peer.lastReadSeq`, событие `chat.read`; настройки приватности нет.
+2. Решено (BE-D41, BE-20): другие вкладки читающего синхронизируются по `chat.read`.
 3. `chat.created` не приходит другим вкладкам инициатора — подтвердить или расширить.
 4. Новый участник группы видит всю историю до вступления — решено, так и остаётся (BE-D23).
 5. Решено (BE-D23): `seq` без пропусков с 1, `hasMore` в ответе истории (§3.9).

@@ -95,14 +95,26 @@ export class ChatsService {
     const peers = new Map<string, ChatPeerDto>();
     if (directIds.length > 0) {
       const members = await this.prisma.$queryRaw<
-        { chatId: string; id: string; name: string; avatarUrl: string }[]
+        {
+          chatId: string;
+          id: string;
+          name: string;
+          avatarUrl: string;
+          lastReadSeq: number;
+        }[]
       >`
-        SELECT cm.chat_id AS "chatId", u.id, u.name, u.avatar_url AS "avatarUrl"
+        SELECT cm.chat_id AS "chatId", u.id, u.name, u.avatar_url AS "avatarUrl",
+               cm.last_read_seq AS "lastReadSeq"
         FROM chat_members cm
         JOIN users u ON u.id = cm.user_id
         WHERE cm.chat_id = ANY(${directIds}::uuid[])`;
       for (const m of members) {
-        const peer = { id: m.id, name: m.name, avatarUrl: m.avatarUrl };
+        const peer = {
+          id: m.id,
+          name: m.name,
+          avatarUrl: m.avatarUrl,
+          lastReadSeq: m.lastReadSeq,
+        };
         // Собеседник — другой участник; в чате с собой строка одна, и это я.
         if (m.id !== userId || !peers.has(m.chatId)) peers.set(m.chatId, peer);
       }

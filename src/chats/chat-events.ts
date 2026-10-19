@@ -12,7 +12,12 @@ export type ChatEvent =
       payload: { chatId: string; title?: string; members?: ChatMemberDto[] };
     }
   | { type: 'chat.removed'; recipients: string[]; payload: { chatId: string } }
-  | { type: 'message.new'; recipients: string[]; payload: ChatMessageDto };
+  | { type: 'message.new'; recipients: string[]; payload: ChatMessageDto }
+  | {
+      type: 'chat.read';
+      recipients: string[];
+      payload: { chatId: string; userId: string; lastReadSeq: number };
+    };
 
 /** Вызывается только после коммита транзакции; получатели передаются явно. */
 export interface ChatEventsPublisher {
