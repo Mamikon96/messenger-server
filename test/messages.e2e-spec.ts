@@ -473,6 +473,94 @@ describe('Messages (e2e)', () => {
       expect(await readSeq(chatId, bob.userId)).toBe(5);
     });
 
+    it('publishes chat.read to all current members including the reader only when last_read_seq moves', async () => {
+      const { alice, bob, chatId } = await directChat();
+      for (let i = 0; i < 3; i++) await send(alice, chatId, msg()).expect(201);
+      recorder.events.length = 0;
+
+      await markRead(bob, chatId, { seq: 2 }).expect(204);
+      expect(recorder.events).toHaveLength(1);
+      expect(recorder.events[0]).toEqual({
+        type: 'chat.read',
+        recipients: expect.arrayContaining([alice.userId, bob.userId]),
+        payload: { chatId, userId: bob.userId, lastReadSeq: 2 },
+      });
+      expect(recorder.events[0].recipients).toHaveLength(2);
+
+      recorder.events.length = 0;
+      await markRead(bob, chatId, { seq: 2 }).expect(204);
+      await markRead(bob, chatId, { seq: 1 }).expect(204);
+      await markRead(bob, chatId, { seq: 0 }).expect(204);
+      expect(recorder.events).toEqual([]);
+
+      await markRead(bob, chatId, { seq: 3 }).expect(204);
+      expect(recorder.events).toHaveLength(1);
+      expect(recorder.events[0].payload).toEqual({
+        chatId,
+        userId: bob.userId,
+        lastReadSeq: 3,
+      });
+    });
+
+    it('does not publish chat.read on a rejected seq or for a non-member', async () => {
+      const { alice, bob, chatId } = await directChat();
+      await send(alice, chatId, msg()).expect(201);
+      const stranger = await loginAs(app);
+      recorder.events.length = 0;
+      await markRead(bob, chatId, { seq: 2 }).expect(400);
+      await markRead(stranger, chatId, { seq: 1 }).expect(404);
+      expect(recorder.events).toEqual([]);
+    });
+
+    it('answers 404 after the member left the group and 404 after the chat was deleted', async () => {
+      const owner = await loginAs(app, { name: 'Owner' });
+      const member = await loginAs(app, { name: 'Member' });
+      const created = await http()
+        .post('/api/chats')
+        .set('Cookie', owner.cookie)
+        .set('X-CSRF-Token', owner.csrf)
+        .send({ type: 'group', title: 'G', memberIds: [member.userId] })
+        .expect(201);
+      const chatId = created.body.id as string;
+      await send(owner, chatId, msg()).expect(201);
+      await http()
+        .delete(`/api/chats/${chatId}/members/${member.userId}`)
+        .set('Cookie', owner.cookie)
+        .set('X-CSRF-Token', owner.csrf)
+        .expect(204);
+      recorder.events.length = 0;
+      await markRead(member, chatId, { seq: 1 }).expect(404);
+      await http()
+        .delete(`/api/chats/${chatId}`)
+        .set('Cookie', owner.cookie)
+        .set('X-CSRF-Token', owner.csrf)
+        .expect(204);
+      recorder.events.length = 0;
+      await markRead(owner, chatId, { seq: 1 }).expect(404);
+      expect(recorder.events).toEqual([]);
+    });
+
+    it('survives concurrent send and read without deadlock or 5xx', async () => {
+      const { alice, bob, chatId } = await directChat();
+      for (let i = 0; i < 15; i++) await send(alice, chatId, msg()).expect(201);
+      const requests: Promise<number>[] = [];
+      for (let i = 0; i < 15; i++) {
+        requests.push(
+          send(alice, chatId, msg()).then((r) => r.status),
+          send(bob, chatId, msg()).then((r) => r.status),
+          markRead(bob, chatId, { seq: 1 + i }).then((r) => r.status),
+          markRead(alice, chatId, { seq: 1 }).then((r) => r.status),
+        );
+      }
+      const statuses = await Promise.all(requests);
+      expect(statuses.filter((s) => s >= 500)).toEqual([]);
+      expect(statuses.filter((s) => s === 400)).toEqual([]);
+      const chat = await prisma.chat.findUniqueOrThrow({
+        where: { id: chatId },
+      });
+      expect(chat.lastSeq).toBe(45);
+    });
+
     it('rejects seq above last_seq and invalid bodies with 400', async () => {
       const { alice, bob, chatId } = await directChat();
       await send(alice, chatId, msg()).expect(201);

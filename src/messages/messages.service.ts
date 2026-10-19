@@ -128,22 +128,43 @@ export class MessagesService {
     };
   }
 
-  /** `last_read_seq` двигается только вперёд; `seq` больше `last_seq` чата — `400`. */
+  /**
+   * `last_read_seq` двигается только вперёд; `seq` больше `last_seq` чата — `400`.
+   * Транзакция с порядком блокировок «чат → участник», как в `send` (BE-D41): строка чата
+   * блокируется до чтения, поэтому удаление участника/чата и параллельная отправка не гоняются.
+   * `chat.read` — после коммита, только при фактическом сдвиге; получатели — снимок участников
+   * из той же транзакции.
+   */
   async markRead(userId: string, chatId: string, seq: number): Promise<void> {
-    await this.access.requireMember(this.prisma, chatId, userId);
-    // Проверка `seq <= last_seq` и сдвиг — одним оператором: без гонки с параллельной отправкой.
-    const updated = await this.prisma.$executeRaw`
-      UPDATE chat_members cm
-      SET last_read_seq = GREATEST(cm.last_read_seq, ${seq}::int)
-      FROM chats c
-      WHERE cm.chat_id = ${chatId}::uuid AND cm.user_id = ${userId}::uuid
-        AND c.id = cm.chat_id AND c.last_seq >= ${seq}::int`;
-    if (updated === 0)
-      throw new AppError(
-        400,
-        'validation_failed',
-        'seq is beyond the last message',
-      );
+    const recipients = await this.prisma.$transaction(async (tx) => {
+      const { chat } = await this.access.requireMember(tx, chatId, userId, {
+        lock: true,
+      });
+      if (seq > chat.lastSeq)
+        throw new AppError(
+          400,
+          'validation_failed',
+          'seq is beyond the last message',
+        );
+      const moved = await tx.$queryRaw<{ lastReadSeq: number }[]>`
+        UPDATE chat_members SET last_read_seq = ${seq}::int
+        WHERE chat_id = ${chatId}::uuid AND user_id = ${userId}::uuid
+          AND last_read_seq < ${seq}::int
+        RETURNING last_read_seq AS "lastReadSeq"`;
+      if (moved.length === 0) return null;
+      const members = await tx.chatMember.findMany({
+        where: { chatId },
+        select: { userId: true },
+      });
+      return members.map((m) => m.userId);
+    });
+    if (recipients) {
+      this.events.publish({
+        type: 'chat.read',
+        recipients,
+        payload: { chatId, userId, lastReadSeq: seq },
+      });
+    }
   }
 
   private validateBody(body: string): void {

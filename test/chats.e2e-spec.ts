@@ -79,10 +79,12 @@ describe('Chats (e2e)', () => {
       expect(member.role).toBe('member');
       expect(Object.keys(member).sort()).toEqual([
         'avatarUrl',
+        'lastReadSeq',
         'name',
         'role',
         'userId',
       ]);
+      expect(member.lastReadSeq).toBe(0);
     }
     expect(
       first.body.members.map((m: { userId: string }) => m.userId).sort(),
@@ -522,13 +524,139 @@ describe('Chats (e2e)', () => {
         [me.userId, other.userId].sort(),
       );
       for (const peer of peers) {
-        expect(Object.keys(peer).sort()).toEqual(['avatarUrl', 'id', 'name']);
+        expect(Object.keys(peer).sort()).toEqual([
+          'avatarUrl',
+          'id',
+          'lastReadSeq',
+          'name',
+        ]);
       }
       const seen = await listChats(other).expect(200);
       const seenDirect = seen.body.find(
         (c: { type: string }) => c.type === 'direct',
       );
       expect(seenDirect.peer.id).toBe(me.userId);
+    });
+
+    it('returns peer.lastReadSeq for direct chats and no read field for groups', async () => {
+      const me = await loginAs(app, { name: 'Me' });
+      const other = await loginAs(app, { name: 'Other' });
+      const direct = (
+        await createChat(me, { type: 'direct', userId: other.userId }).expect(
+          201,
+        )
+      ).body;
+      const self = (
+        await createChat(me, { type: 'direct', userId: me.userId }).expect(201)
+      ).body;
+      const group = (
+        await createChat(me, {
+          type: 'group',
+          title: 'G',
+          memberIds: [other.userId],
+        }).expect(201)
+      ).body;
+      await prisma.chat.updateMany({ data: { lastSeq: 9 } });
+      await prisma.chatMember.update({
+        where: { chatId_userId: { chatId: direct.id, userId: other.userId } },
+        data: { lastReadSeq: 4 },
+      });
+      await prisma.chatMember.update({
+        where: { chatId_userId: { chatId: self.id, userId: me.userId } },
+        data: { lastReadSeq: 7 },
+      });
+
+      const find = (rows: { id: string }[], id: string) =>
+        rows.find((c) => c.id === id) as Record<string, unknown>;
+      const mine = (await listChats(me).expect(200)).body;
+      expect(find(mine, direct.id).peer).toEqual({
+        id: other.userId,
+        name: 'Other',
+        avatarUrl: expect.any(String),
+        lastReadSeq: 4,
+      });
+      expect(find(mine, self.id).peer).toMatchObject({
+        id: me.userId,
+        lastReadSeq: 7,
+      });
+      expect(find(mine, group.id)).not.toHaveProperty('peer');
+      const theirs = (await listChats(other).expect(200)).body;
+      expect(find(theirs, direct.id).peer).toMatchObject({
+        id: me.userId,
+        lastReadSeq: 0,
+      });
+    });
+
+    it('includes lastReadSeq of every member in GET /chats/:id, chat.created and chat.updated, and drops a removed member', async () => {
+      const owner = await loginAs(app, { name: 'Owner' });
+      const a = await loginAs(app, { name: 'A' });
+      const b = await loginAs(app, { name: 'B' });
+      const chat = (
+        await createChat(owner, {
+          type: 'group',
+          title: 'G',
+          memberIds: [a.userId],
+        }).expect(201)
+      ).body;
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: { lastSeq: 6 },
+      });
+      await prisma.chatMember.update({
+        where: { chatId_userId: { chatId: chat.id, userId: a.userId } },
+        data: { lastReadSeq: 2 },
+      });
+      recorder.events.length = 0;
+
+      const full = (
+        await request(app.getHttpServer())
+          .get(`/api/chats/${chat.id}`)
+          .set('Cookie', owner.cookie)
+          .expect(200)
+      ).body;
+      expect(
+        Object.fromEntries(
+          full.members.map((m: { userId: string; lastReadSeq: number }) => [
+            m.userId,
+            m.lastReadSeq,
+          ]),
+        ),
+      ).toEqual({ [owner.userId]: 0, [a.userId]: 2 });
+
+      await request(app.getHttpServer())
+        .post(`/api/chats/${chat.id}/members`)
+        .set('Cookie', owner.cookie)
+        .set('X-CSRF-Token', owner.csrf)
+        .send({ userId: b.userId })
+        .expect(204);
+      const created = recorder.events.find((e) => e.type === 'chat.created');
+      const updated = recorder.events.find((e) => e.type === 'chat.updated');
+      for (const event of [created, updated]) {
+        const members = (event?.payload as { members: { userId: string }[] })
+          .members;
+        expect(members).toHaveLength(3);
+        for (const m of members) expect(m).toHaveProperty('lastReadSeq');
+      }
+      const newcomer = (
+        created?.payload as {
+          members: { userId: string; lastReadSeq: number }[];
+        }
+      ).members.find((m) => m.userId === b.userId);
+      expect(newcomer?.lastReadSeq).toBe(6);
+
+      recorder.events.length = 0;
+      await request(app.getHttpServer())
+        .delete(`/api/chats/${chat.id}/members/${a.userId}`)
+        .set('Cookie', owner.cookie)
+        .set('X-CSRF-Token', owner.csrf)
+        .expect(204);
+      const afterRemove = recorder.events.find(
+        (e) => e.type === 'chat.updated',
+      );
+      const rest = (afterRemove?.payload as { members: { userId: string }[] })
+        .members;
+      expect(rest.map((m) => m.userId)).not.toContain(a.userId);
+      for (const m of rest) expect(m).toHaveProperty('lastReadSeq');
     });
 
     it('executes a bounded number of queries', async () => {

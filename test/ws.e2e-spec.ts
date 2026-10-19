@@ -312,6 +312,56 @@ describe('WebSocket handshake and frames (e2e)', () => {
       }
     });
 
+    const markRead = (as: TestLogin, chatId: string, seq: number) =>
+      post(as, `/api/chats/${chatId}/read`, { seq });
+
+    it('delivers chat.read to all members including the reader tabs, only on a shift', async () => {
+      const bob = await loginAs(app, { name: 'Bob' });
+      const chat = await createGroup(alice, [bob]);
+      await sendMessage(alice, chat.id).expect(201);
+      await sendMessage(alice, chat.id).expect(201);
+      const aliceTab = await open(alice);
+      const bobTab1 = await open(bob);
+      const bobTab2 = await open(bob);
+
+      await markRead(bob, chat.id, 2).expect(204);
+      for (const client of [aliceTab, bobTab1, bobTab2]) {
+        expect(await client.next()).toEqual({
+          type: 'chat.read',
+          payload: { chatId: chat.id, userId: bob.userId, lastReadSeq: 2 },
+        });
+      }
+
+      await markRead(bob, chat.id, 2).expect(204);
+      await markRead(bob, chat.id, 1).expect(204);
+      for (const client of [aliceTab, bobTab1, bobTab2]) {
+        await quiet(client);
+        client.close();
+      }
+    });
+
+    it('does not send chat.read to a member removed from the chat', async () => {
+      const bob = await loginAs(app, { name: 'Bob' });
+      const carol = await loginAs(app, { name: 'Carol' });
+      const chat = await createGroup(alice, [bob, carol]);
+      await sendMessage(alice, chat.id).expect(201);
+      const bobTab = await open(bob);
+      const carolTab = await open(carol);
+      await http()
+        .delete(`/api/chats/${chat.id}/members/${bob.userId}`)
+        .set('Cookie', alice.cookie)
+        .set('X-CSRF-Token', alice.csrf)
+        .expect(204);
+      expect((await bobTab.next()).type).toBe('chat.removed');
+      expect((await carolTab.next()).type).toBe('chat.updated');
+
+      await markRead(carol, chat.id, 1).expect(204);
+      expect((await carolTab.next()).type).toBe('chat.read');
+      await quiet(bobTab);
+      bobTab.close();
+      carolTab.close();
+    });
+
     it('keeps POST /messages working when a socket throws on send', async () => {
       const bob = await loginAs(app, { name: 'Bob' });
       const chat = await createGroup(alice, [bob]);
