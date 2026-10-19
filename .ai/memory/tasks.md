@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-19 @ 718f919+dirty
+> Проверено: 2026-10-19 @ 95656b6+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -17,7 +17,10 @@
   - Вне рамок: полная изоляция прогонов (уникальные проект и порт), macOS, замена `flock`.
   - Затрагивает: `scripts/accept.sh`, `docker-compose.yml`, `vitest.config.e2e.ts`, `.ai/rules/acceptance.md`, `.claude/agents/nestjs-engineer.md`; контракт API: нет; схема БД: нет.
   - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: тесты логики блокировки и артефактов, правка `accept.sh`, compose и vitest, правила агентов, пять прогонов, ревью.
+  - Сделано: `accept-lib.sh`, `accept.spec.mjs` (4/4), правки `accept.sh`, compose, vitest, правила агентов; `check-fast.sh` зелёный.
+  - Серия 1 из 5 (2026-10-19): 4 зелёных, прогон 3 упал: `auth.e2e-spec.ts` блок BE-45 (40 argon2, таймаут 5 с под нагрузкой); добавлен таймаут 30 с обоим тестам блока.
+  - Серия 2 из 5 (2026-10-19): 5/5 зелёных без `| tail`; `kill` на e2e → следующий прогон зелёный с новым контейнером; искусственно красный e2e → код 1 и каталог `/tmp/accept-<ts>/` с артефактами. Ревью `nestjs-reviewer`: APPROVE WITH FIXES (BLOCKER/MAJOR нет; замечания MINOR учтены в `acceptance.md`).
+  - Осталось: коммит, push, PR.
 
 ## Бэклог
 - **BE-64 (P3)** markRead после удаления чата или участника отдаёт 400 «seq is beyond the last message» вместо 404 (гонка без блокировки)
