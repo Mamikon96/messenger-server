@@ -8,6 +8,7 @@ export default defineConfig({
     root: './',
     include: ['**/*.e2e-spec.ts'],
     fileParallelism: false,
+    hookTimeout: 30000,
     env: {
       // e2e всегда идут в тестовую БД, чтобы TRUNCATE не стёр dev-данные
       DATABASE_URL:

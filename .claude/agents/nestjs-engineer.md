@@ -14,7 +14,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 3. Реализация минимальная, только под критерии. Замеченное вне рамок — строкой в «Бэклог» `tasks.md`, не в код.
 4. Внутренний цикл — `bash scripts/check-fast.sh`. Одна и та же проверка упала 3 раза подряд — остановись и верни вызывающему: что пробовал, вывод, гипотезу.
 5. Меняешь маршрут, код ошибки, env, WS-событие, схему БД, DTO или лимит — правь в той же задаче спеку и `docs/client-integration.md` (иначе упадёт `scripts/check-sync.mjs`).
-6. Финал — `bash scripts/accept.sh`, затем память по `.ai/rules/memory-protocol.md` («Осталось», `state.md`, штамп, `bash scripts/check-memory.sh`).
+6. Финал — `bash scripts/accept.sh` (Bash с `timeout: 600000` или в фоне; без `| tail`; не параллельно с `test:e2e` и другим `accept.sh`; `.ai/rules/acceptance.md`), затем память по `.ai/rules/memory-protocol.md` («Осталось», `state.md`, штамп, `bash scripts/check-memory.sh`).
 
 ## Нельзя
 - Библиотека или подход, которых нет в `package.json` и решениях (`decisions.md`, `decisions/`), — верни вопрос вызывающему (`.ai/rules/tech-approval.md`).

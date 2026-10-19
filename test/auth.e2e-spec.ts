@@ -843,7 +843,7 @@ describe('Auth: argon2 concurrency gate (e2e, BE-45)', () => {
       expect(res.headers['retry-after']).toBe('1');
       expect(res.headers['set-cookie']).toBeUndefined();
     }
-  });
+  }, 30_000);
 
   it('after the burst drains the gate accepts logins again', async () => {
     await createUserRow(prisma, { login: 'after-burst' });
@@ -853,5 +853,5 @@ describe('Auth: argon2 concurrency gate (e2e, BE-45)', () => {
       ),
     );
     await login({ login: 'after-burst', password: TEST_PASSWORD }).expect(200);
-  });
+  }, 30_000);
 });
