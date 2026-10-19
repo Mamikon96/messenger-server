@@ -1,5 +1,5 @@
 # Задачи backend
-> Проверено: 2026-10-19 @ 4ed5435+dirty
+> Проверено: 2026-10-19 @ 73e6fc8+dirty
 
 Формат: `BE-NN` — название. Приоритет P1 (важно) … P3. Бэклог — одна строка ≤ 200 символов на задачу, детали — в `backlog/BE-NN.md` (при старте задачи контракт переносится сюда, файл удаляется).
 Готовность — после зелёного `bash scripts/accept.sh` И APPROVE ревьюера `nestjs-reviewer`, если матрица в `acceptance.md` не освобождает от шага (см. `decisions.md` SH-D02, `CLAUDE.md`).
@@ -19,11 +19,11 @@
   - Вне рамок: настройка приватности «не показывать прочтение» (миграция `users`); серверный throttle событий; `unreadCount` в payload `chat.read`; `last_read_at`; изменения клиента `messenger-client-react`.
   - Затрагивает: `src/messages` (markRead), `src/chats` (mapper, DTO, events, service), `src/realtime`; `docs/`; контракт API: да; схема БД: нет.
   - Проверка: `bash scripts/check-fast.sh`; финал `bash scripts/accept.sh`.
-  - Осталось: подтверждение контракта пользователем; `git-task.sh start BE-20 read-receipts`; тесты (unit, e2e REST и WS) → реализация → документация → accept.sh → nestjs-reviewer → PR.
+  - Осталось: коммиты → push → PR (accept.sh = 0, nestjs-reviewer: APPROVE WITH FIXES, BLOCKER и MAJOR нет; BE-64 закрыт критерием 5).
 
 ## Бэклог
 - **BE-65 (P3, харнес)** Хвосты BE-43 (MINOR ревью): дождаться tee в accept.sh, устойчивый тест замка, fd замка для детей
-- **BE-64 (P3)** markRead после удаления чата или участника отдаёт 400 «seq is beyond the last message» вместо 404 (гонка без блокировки)
+- **BE-66 (P3)** Детерминированный e2e порядка блокировок markRead (удержать FOR UPDATE чата, удалить участника) — MINOR ревью BE-20
 - **BE-53 (P2)** GET /api/users без q → 400 (после перехода клиента на поиск)
 - **BE-47 (P3)** Лимит на смену пароля POST /api/me/password (два argon2 на запрос)
 - **BE-27 (P3, харнес)** Харнес: мутационные тесты check-sync.spec зависят от состояния tasks.md
