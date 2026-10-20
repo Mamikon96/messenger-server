@@ -561,6 +561,63 @@ describe('Messages (e2e)', () => {
       expect(chat.lastSeq).toBe(45);
     });
 
+    it('takes the chat lock before reading membership: member removed while read waits -> 404, no event', async () => {
+      const { alice, bob, chatId } = await directChat();
+      await send(alice, chatId, msg()).expect(201);
+      recorder.events.length = 0;
+      const waitingOnChatLock = async () =>
+        (
+          await prisma.$queryRaw<{ n: number }[]>`
+            SELECT count(*)::int AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query ILIKE '%FROM chats%FOR UPDATE%'`
+        )[0].n;
+
+      let release!: () => void;
+      let locked!: () => void;
+      const lockTaken = new Promise<void>((r) => (locked = r));
+      const gate = new Promise<void>((r) => (release = r));
+      const holder = prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM chats WHERE id = ${chatId}::uuid FOR UPDATE`;
+        locked();
+        await gate;
+        await tx.chatMember.delete({
+          where: { chatId_userId: { chatId, userId: bob.userId } },
+        });
+      });
+      await lockTaken;
+
+      let settled = false;
+      let res: Awaited<ReturnType<typeof markRead>>;
+      try {
+        const read = markRead(bob, chatId, { seq: 1 }).then((r) => {
+          settled = true;
+          return r;
+        });
+        // Ждём, пока запрос встанет на блокировке чата (или, без lock, завершится сам).
+        for (
+          let i = 0;
+          i < 100 && !settled && !(await waitingOnChatLock());
+          i++
+        ) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        release();
+        await holder;
+        res = await read;
+      } finally {
+        release();
+        await holder.catch(() => undefined);
+      }
+
+      expect(res.status).toBe(404);
+      expect(recorder.events).toEqual([]);
+      const row = await prisma.chatMember.findUnique({
+        where: { chatId_userId: { chatId, userId: bob.userId } },
+      });
+      expect(row).toBeNull();
+    });
+
     it('rejects seq above last_seq and invalid bodies with 400', async () => {
       const { alice, bob, chatId } = await directChat();
       await send(alice, chatId, msg()).expect(201);
