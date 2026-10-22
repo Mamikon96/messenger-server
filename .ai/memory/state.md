@@ -1,5 +1,5 @@
 # Состояние backend
-> Проверено: 2026-10-22 @ 88eb2fc+dirty
+> Проверено: 2026-10-22 @ 8673a56+dirty
 
 ## Общее
 NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза 4 — WebSocket `/ws`, BE-09): конфиг, схема БД, формат ошибок, сессии/CSRF, `GET /api/users`. Админка пользователей (`users.disabled_at`, BE-21). Вход по passkeys, инвайты и CLI `admin:invite` удалены (BE-32, BE-33; SH-D18, BE-D38): вход и регистрация по логину и паролю — `POST /api/auth/register` и `POST /api/auth/login` (BE-44), e2e создают пользователей и сессии через `loginAs` (заранее вычисленный хэш пароля). События `chat.*` и `message.new` доставляются по WebSocket (`src/realtime/`, `WsChatEvents` на токене `CHAT_EVENTS`); клиент пока не подключён (BE-15).
@@ -19,4 +19,4 @@ NestJS 12 + Prisma 7/PostgreSQL. Фазы 1–4 реализованы (фаза
 Клиент переходит на вход по логину/паролю (BE-22, контракт — `docs/client-integration.md`): его `auth-contract.md` устарел (OAuth); копию прежней отдельной спеки входа по паролю у клиента заменить ссылкой на `client-integration.md`.
 
 ## Фокус сейчас
-BE-53 (`GET /api/users` без `q` → 400) реализована и принята, ждёт слияния PR и архивации. После слияния: клиентская задача на mock-BFF.
+BE-53 закрыта и в архиве (PR #47). Дальше: клиентская задача на mock-BFF (`mock-bff/server.js:226-234`) — ждёт согласия, в клиенте незакоммиченный FE-47.
