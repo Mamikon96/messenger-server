@@ -7,7 +7,7 @@ const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
 
 const query = z
-  .string()
+  .string('q is required')
   .trim()
   .refine((q) => {
     const length = [...q].length;
@@ -25,8 +25,7 @@ const limit = z
   .refine((n) => n >= 1 && n <= MAX_LIMIT, `limit must be 1..${MAX_LIMIT}`);
 
 export const searchUsersSchema = z
-  .object({ q: query.optional(), limit: limit.optional() })
-  .refine((v) => v.limit === undefined || v.q !== undefined, 'limit requires q')
+  .object({ q: query, limit: limit.optional() })
   .transform(({ q, limit }) => ({ q, limit: limit ?? DEFAULT_LIMIT }));
 
 export type SearchUsersDto = z.infer<typeof searchUsersSchema>;

@@ -26,34 +26,6 @@ describe('Users (e2e)', () => {
     await request(app.getHttpServer()).get('/api/users').expect(401);
   });
 
-  it('returns users sorted by name with exactly id, name, avatarUrl', async () => {
-    const me = await loginAs(app, { name: 'Zed' });
-    await loginAs(app, { name: 'Alice', isAdmin: true });
-    const res = await request(app.getHttpServer())
-      .get('/api/users')
-      .set('Cookie', me.cookie)
-      .expect(200);
-    expect(res.body.map((u: { name: string }) => u.name)).toEqual([
-      'Alice',
-      'Zed',
-    ]);
-    for (const user of res.body) {
-      expect(Object.keys(user).sort()).toEqual(['avatarUrl', 'id', 'name']);
-    }
-  });
-
-  it('GET /users hides disabled users', async () => {
-    const me = await loginAs(app, { name: 'Me' });
-    const disabled = await loginAs(app, { name: 'Disabled', disabled: true });
-    const res = await request(app.getHttpServer())
-      .get('/api/users')
-      .set('Cookie', me.cookie)
-      .expect(200);
-    const ids = res.body.map((u: { id: string }) => u.id);
-    expect(ids).toContain(me.userId);
-    expect(ids).not.toContain(disabled.userId);
-  });
-
   describe('search (?q=)', () => {
     const search = (cookie: string, query: string) =>
       request(app.getHttpServer())
@@ -64,6 +36,7 @@ describe('Users (e2e)', () => {
 
     it('returns 401 without a session', async () => {
       await request(app.getHttpServer()).get('/api/users?q=al').expect(401);
+      await request(app.getHttpServer()).get('/api/users').expect(401);
     });
 
     it.each([
@@ -79,12 +52,23 @@ describe('Users (e2e)', () => {
       ['limit 0', '?q=al&limit=0'],
       ['limit 51', '?q=al&limit=51'],
       ['limit not a number', '?q=al&limit=abc'],
+      ['no query string', ''],
       ['limit without q', '?limit=5'],
     ])('rejects %s with 400 validation_failed and no details', async (_n, qs) => {
       const me = await loginAs(app, { name: 'Me' });
       const res = await search(me.cookie, qs).expect(400);
       expect(res.body.error.code).toBe('validation_failed');
       expect(res.body.error.details).toBeUndefined();
+    });
+
+    it('rejects a missing q with the message "q is required"', async () => {
+      const me = await loginAs(app, { name: 'Me' });
+      await loginAs(app, { name: 'Other' });
+      const res = await search(me.cookie, '').expect(400);
+      expect(res.body.error.message).toBe('q is required');
+      expect(res.body).not.toBeInstanceOf(Array);
+      const withLimit = await search(me.cookie, '?limit=5').expect(400);
+      expect(withLimit.body.error.message).toBe('q is required');
     });
 
     it('accepts 64 characters and counts code points, not UTF-16 units', async () => {
@@ -183,12 +167,6 @@ describe('Users (e2e)', () => {
       await loginAs(app, { name: 'Bkim' });
       expect(names(await search(me.cookie, '?q=kim&limit=2').expect(200))).toEqual(['Kim', 'Akim']);
     });
-
-    it('without q still returns the full directory, including the caller', async () => {
-      const me = await loginAs(app, { name: 'Me' });
-      await loginAs(app, { name: 'Other' });
-      expect(names(await search(me.cookie, '').expect(200))).toEqual(['Me', 'Other']);
-    });
   });
 
   describe('search rate limit', () => {
@@ -202,6 +180,7 @@ describe('Users (e2e)', () => {
         const get = (qs: string) =>
           request(limited.getHttpServer()).get(`/api/users${qs}`).set('Cookie', me.cookie);
         for (let i = 0; i < 5; i++) await get('?q=a').expect(400);
+        for (let i = 0; i < 5; i++) await get('').expect(400);
         for (let i = 0; i < 3; i++) await get('?q=al').expect(200);
         const res = await get('?q=al').expect(429);
         expect(res.body.error.code).toBe('rate_limited');
