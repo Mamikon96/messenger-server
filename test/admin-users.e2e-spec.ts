@@ -75,18 +75,23 @@ describe('Admin users (e2e)', () => {
 
   it('disable revokes sessions (old cookie → 401) and hides user from GET /users', async () => {
     const bob = await loginAs(app, { name: 'Bob' });
-    await http().get('/api/users').set('Cookie', bob.cookie).expect(200);
+    const before = await http()
+      .get('/api/users?q=bo')
+      .set('Cookie', admin.cookie)
+      .expect(200);
+    expect(before.body.map((u: { name: string }) => u.name)).toEqual(['Bob']);
+    await http().get('/api/users?q=ad').set('Cookie', bob.cookie).expect(200);
     const res = await patch(admin, bob.userId, { disabled: true }).expect(200);
     expect(res.body.disabledAt).not.toBeNull();
-    await http().get('/api/users').set('Cookie', bob.cookie).expect(401);
+    await http().get('/api/users?q=ad').set('Cookie', bob.cookie).expect(401);
     expect(await prisma.session.count({ where: { userId: bob.userId } })).toBe(
       0,
     );
     const users = await http()
-      .get('/api/users')
+      .get('/api/users?q=bo')
       .set('Cookie', admin.cookie)
       .expect(200);
-    expect(users.body.map((u: { id: string }) => u.id)).toEqual([admin.userId]);
+    expect(users.body).toEqual([]);
   });
 
   it('enable restores visibility', async () => {
@@ -94,13 +99,10 @@ describe('Admin users (e2e)', () => {
     const res = await patch(admin, bob.userId, { disabled: false }).expect(200);
     expect(res.body.disabledAt).toBeNull();
     const users = await http()
-      .get('/api/users')
+      .get('/api/users?q=bo')
       .set('Cookie', admin.cookie)
       .expect(200);
-    expect(users.body.map((u: { name: string }) => u.name)).toEqual([
-      'Admin',
-      'Bob',
-    ]);
+    expect(users.body.map((u: { name: string }) => u.name)).toEqual(['Bob']);
   });
 
   it('promote to admin works (new admin passes AdminGuard)', async () => {

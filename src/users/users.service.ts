@@ -21,14 +21,6 @@ export class UsersService {
     private readonly searchLimiter: UserSearchRateLimiter,
   ) {}
 
-  list(): Promise<UserSummary[]> {
-    return this.prisma.user.findMany({
-      where: activeUserWhere,
-      select: { id: true, name: true, avatarUrl: true },
-      orderBy: { name: 'asc' },
-    });
-  }
-
   /**
    * Name search, case-insensitive: names starting with `q` first, then the other
    * substring matches; each group by `name`, `id`. The caller and disabled users are

@@ -111,7 +111,7 @@ describe('PATCH /api/me (e2e)', () => {
     expect(long.body.name).toBe(`${'x'.repeat(64)} ${'y'.repeat(64)}`);
   });
 
-  it('shows the new name in GET /api/users and GET /api/chats/:id', async () => {
+  it('shows the new name in GET /api/users?q= and GET /api/chats/:id', async () => {
     const me = await loginAs(app, { name: 'Me' });
     const other = await loginAs(app, { name: 'Other' });
     const chat = await request(app.getHttpServer())
@@ -123,7 +123,7 @@ describe('PATCH /api/me (e2e)', () => {
     await patch(me, { firstName: 'Zoe', lastName: 'Zed' }).expect(200);
 
     const users = await request(app.getHttpServer())
-      .get('/api/users')
+      .get('/api/users?q=zoe')
       .set('Cookie', other.cookie)
       .expect(200);
     expect(
